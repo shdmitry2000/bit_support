@@ -1,0 +1,31 @@
+langchain 
+langchain-community
+langgraph 
+langchain_openai 
+langchainhub 
+langsmith 
+duckduckgo-search 
+beautifulsoup4 
+unstructured
+
+
+streamlit
+openai
+
+config
+pypdf
+chromadb
+python-dotenv
+html2text
+llama-index
+python-bidi
+cleantext
+
+chromadb
+faiss
+llama-index
+
+fastapi
+
+# pip install -U langchain-cli
+# langchain app new my-app --package rag-conversation
