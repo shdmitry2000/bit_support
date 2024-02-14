@@ -3,7 +3,7 @@ import streamlit as st
 
 import functools, operator, requests, os, json
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
+# from duckduckgo_search import DDGS
 from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
