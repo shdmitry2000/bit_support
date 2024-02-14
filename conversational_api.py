@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 from pydantic import BaseModel
 from fastapi import HTTPException, FastAPI, Response, Depends
 from uuid import UUID, uuid4
@@ -6,9 +7,10 @@ from fastapi_sessions.backends.implementations import InMemoryBackend
 from fastapi_sessions.session_verifier import SessionVerifier
 from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 
-from langchain.agents.agent import AgentExecutor
 from typing import Dict
-from bit_agent_interface import *
+import bit_agent_interface_history
+
+load_dotenv()
 
 
 server_storage = {}
@@ -89,7 +91,7 @@ async def create_session(name: str, response: Response):
 
 
     # Store the object in a server-side dictionary or cache using the handle as the key
-    server_storage[session] = getConversational()
+    server_storage[session] = bit_agent_interface_history.Conversational()
 
     # data = SessionData(username=name)
     data = SessionData(username=name)

@@ -26,6 +26,9 @@ faiss
 llama-index
 
 fastapi
+fastapi_sessions
+uvicorn
+
 
 # pip install -U langchain-cli
 # langchain app new my-app --package rag-conversation
