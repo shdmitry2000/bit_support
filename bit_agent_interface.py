@@ -201,7 +201,20 @@ class Conversational:
         print(response)
         return response['messages'][1].content
 
-
+    def invoke(
+        self,
+        input: Union[dict[str, Any], Any],
+        config: Optional[RunnableConfig] = None,
+        *,
+        output_keys: Optional[Union[str, Sequence[str]]] = None,
+        input_keys: Optional[Union[str, Sequence[str]]] = None,
+        **kwargs: Any):
+        if isinstance(input,str):
+            response = self.run_graph(input)
+        else:
+            response =graph.invoke(input)
+            
+        return response
     def __call__(self, context):
         # Extract the 'question' from the context dictionary
         question = context['question']

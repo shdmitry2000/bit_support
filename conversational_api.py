@@ -7,7 +7,7 @@ from fastapi_sessions.backends.implementations import InMemoryBackend
 from fastapi_sessions.session_verifier import SessionVerifier
 from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 
-from typing import Dict
+from typing import Dict, List, Union
 import bit_agent_interface_history
 
 load_dotenv()
@@ -20,10 +20,15 @@ class SessionData(BaseModel):
     # qa_object_handle : str
     # qa: AgentExecutor
     # qa = conversational_agent.conversatioalAgentsChatGPT().getConversational()
+    
+class History(BaseModel):
+    field1: str
+    field2: Union[str,List[str]] 
 
 class Conversation(BaseModel):
     question: str
-    history: str | None = None
+    history: Union[str,List[str], List[History]] | None = None
+
 
 cookie_params = CookieParameters()
 
@@ -151,6 +156,6 @@ async def say(conversation:Conversation,session_uid:UUID = None):
     print("object_handle",object_handle)
     qa =server_storage[object_handle]
     print("object_handle 2")
-    res=qa.run(input=conversation.question)
+    res=qa.invoke(input=conversation.question)
     print("res",res)
     return {"question":conversation.question,"answer":res}

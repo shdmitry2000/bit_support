@@ -11,11 +11,14 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, END
 from langchain.tools import tool
 from langchain_openai import ChatOpenAI
-from typing import Annotated, Any, Dict, List, Optional, Sequence, TypedDict
+from typing import Annotated, Any, Dict, List, Optional, Sequence, TypedDict, Union
 import StockTool
 from vector_db_tools import *
 from vector_dbs import *
 
+from langchain_core.runnables.config import (
+    RunnableConfig,
+)
 
 
 # {'question': "My name's bob. How are you?", 'chat_history': [HumanMessage(content="My name's bob. How are you?", additional_kwargs={}, example=False), AIMessage(content="I'm doing well, thank you. How can I assist you today, Bob?", additional_kwargs={}, example=False)], 'answer': "I'm doing well, thank you. How can I assist you today, Bob?"}
@@ -187,7 +190,21 @@ class Conversational:
         return response['messages'][1].content
 
 
-
+    def invoke(
+        self,
+        input: Union[dict[str, Any], Any],
+        config: Optional[RunnableConfig] = None,
+        *,
+        output_keys: Optional[Union[str, Sequence[str]]] = None,
+        input_keys: Optional[Union[str, Sequence[str]]] = None,
+        **kwargs: Any):
+        
+        if isinstance(input,str):
+            response = self.run_graph(input)
+        else:
+            response =self.graph.invoke(input)
+        return response
+            
     
 
     def __call__(self, context):
@@ -195,7 +212,9 @@ class Conversational:
         question = context['question']
         return f"{self.run_graph(question)}"
 
-        
+
+   
+          
        
     
 if __name__ == "__main__":   
