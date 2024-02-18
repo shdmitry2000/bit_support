@@ -9,8 +9,8 @@ from langchain_community.llms import OpenAI
 from langchain_openai import ChatOpenAI
 
 
-from llama_index import ListIndex
-from llama_index.langchain_helpers.memory_wrapper import GPTIndexChatMemory
+# from llama_index import ListIndex
+# from llama_index.langchain_helpers.memory_wrapper import GPTIndexChatMemory
 import logging
 import sys
 from langchain.agents import initialize_agent

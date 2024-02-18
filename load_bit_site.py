@@ -15,7 +15,7 @@ from llama_index import download_loader
 
 from llama_index import PromptHelper
 from dotenv import load_dotenv
-import vector_dbs
+import vector_faiss_dbs
 
 load_dotenv()
 
@@ -76,7 +76,7 @@ for div in faq_divs:
 
 
 
-ll=vector_dbs.llamaRag(embedder=vector_dbs.Embeddings.getdefaultEmbading())
+ll=vector_faiss_dbs.llamaRag(embedder=vector_faiss_dbs.Embeddings.getdefaultEmbading())
 ll.delete()
 ll.build_data(documents)
 

@@ -1,29 +1,64 @@
-langchain 
-langchain-community
+# pip -q install langchain openai tiktoken chromadb pypdf sentence_transformers InstructorEmbedding faiss-cpu
+# pip install llama-index-core llama-index-readers-file llama-index-llms-ollama llama-index-embeddings-huggingface
+# llama-index==0.9.44
+# llama-index==0.10.5
+llama-index==0.10.5
+llama-index-agent-openai==0.1.1
+llama-index-core==0.10.5
+llama-index-embeddings-huggingface==0.1.1
+llama-index-embeddings-langchain==0.1.1
+llama-index-embeddings-openai==0.1.1
+# llama-index-legacy==0.9.48
+llama-index-llms-ollama==0.1.1
+llama-index-llms-openai==0.1.2
+llama-index-llms-replicate==0.1.1
+llama-index-multi-modal-llms-openai==0.1.1
+llama-index-program-openai==0.1.1
+llama-index-question-gen-openai==0.1.1
+llama-index-readers-file==0.1.3
+# llama-index==0.10.5
+# llama-index-core 
+# llama-index-readers-file 
+# llama-index-llms-ollama 
+# llama-index-embeddings-huggingface
+# llama-index-embeddings-langchain
+# llama-index-llms-openai
+
+python-dotenv
+
+langchain==0.1.6
+langchain-community==0.0.19
+langchain-core==0.1.23
+langchain-experimental
+langchain-openai
+langchain-together
+langchain-cli
+
+torch
+chromadb
+faiss-cpu
+
 langgraph 
-langchain_openai 
 langchainhub 
 langsmith 
+
 duckduckgo-search 
 beautifulsoup4 
-unstructured
+# unstructured
 
 
+yfinance
 streamlit
-openai
+# pwd
+# openai
 
 config
 pypdf
-chromadb
-python-dotenv
 html2text
-llama-index
 python-bidi
 cleantext
 
-chromadb
-faiss
-llama-index
+
 
 fastapi
 fastapi_sessions

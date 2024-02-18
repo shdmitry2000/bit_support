@@ -32,7 +32,7 @@ from langchain.agents import Agent
 from langchain.tools import Tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from llama_index.schema import NodeWithScore, QueryBundle, QueryType
+# from llama_index.schema import NodeWithScore, QueryBundle, QueryType
 
 
 from langchain import hub
@@ -77,13 +77,15 @@ class llamaRagTools(basetools.projectBaseTool):
                 description=description,
                 )
             
-    def getRetriverAgent(self,prompt=None,system_prompt ="",verbose=False,return_source_documents=False) :
+    def getRetriverAgent(self,prompt=None,system_prompt ="",tool_name="bit_searcher",
+                         tool_definition="Useful for founding answers for  questions about bit application",
+                         verbose=False,return_source_documents=False) :
         if prompt is None:
             # prompt=hub.pull("rlm/rag-prompt")
             prompt = hub.pull("hwchase17/openai-tools-agent")
         
         model=self.getDefaultChatgptChat()
-        tools=[self.getLangchainToolDefinition()]
+        tools=[self.getLangchainToolDefinition(name=tool_name,description=tool_definition)]
         from langchain.agents import AgentExecutor, create_openai_tools_agent
 
         agent = create_openai_tools_agent(model, tools, prompt)
@@ -113,7 +115,7 @@ class llamaRagTools(basetools.projectBaseTool):
         model=projectBaseTool.getDefaultChatgptChat()
         
         return (
-            # {"context": self.getLangchainRetriver() | format_docs , "question": RunnablePassthrough()}
+            # {"context": self.getLangChainRetriver() | format_docs , "question": RunnablePassthrough()}
             {"context": contextualized_question| self.retriver | print_if_need , "question": RunnablePassthrough()}
             | prompt
             | model
@@ -121,7 +123,7 @@ class llamaRagTools(basetools.projectBaseTool):
             )
         
             # from langchain.chains import RetrievalQA
-            # self.rag_chain  = RetrievalQA.from_llm(llm=projectBaseTool.getDefaultChatgptChat(), retriever=self.getLangchainRetriver(),
+            # self.rag_chain  = RetrievalQA.from_llm(llm=projectBaseTool.getDefaultChatgptChat(), retriever=self.getLangChainRetriver(),
             #      prompt=prompt,
             #      verbose=verbose,return_source_documents=return_source_documents)
             
@@ -167,14 +169,14 @@ class llamaRagTools(basetools.projectBaseTool):
         
         # return  AgentExecutor(agent=self.getRAGChain(), tools=[self.getToolDefinition()], verbose=True,handle_parsing_errors=handle_parsing_errors)
 
-def check_embeding2(ll,query):
+def check_RetriverChain1(ll,query):
     from bidi.algorithm import get_display
 
 
     print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
             get_display(str(ll.getRetriverChain().invoke(query))))
     
-def check_embeding3(ll,query):
+def check_agent(ll,query):
     from bidi.algorithm import get_display
 
     (agent,executer)=ll.getRetriverAgent()
@@ -183,7 +185,7 @@ def check_embeding3(ll,query):
     
 
 
-def check_embeding1(ll,query,history=[]):
+def check_RetriverChain(ll,query,history=[]):
     # ll.load()
     from bidi.algorithm import get_display
 
@@ -208,7 +210,7 @@ if __name__ == "__main__":
     # print(qa.query(query))
     lla=vector_dbs.llamaRag(embedder=vector_dbs.Embeddings.getdefaultEmbading())
     # lla.load()
-    retriver=lla.getLangchainRetriver()
+    retriver=lla.getLangChainRetriver()
     la=llamaRagTools(retriver=retriver)
     
     
@@ -225,7 +227,7 @@ if __name__ == "__main__":
 
     # check_embeding1(la,query)
     # check_embeding2(la,query)
-    check_embeding3(la,query)
+    check_RetriverChain(la,query)
     
     # question="מה זה ביט?"
     # executer= la.getExecuter()

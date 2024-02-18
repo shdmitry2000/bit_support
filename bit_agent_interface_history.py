@@ -42,7 +42,7 @@ class Conversational:
 
         lla=vector_dbs.llamaRag(embedder=vector_dbs.Embeddings.getdefaultEmbading())
         # lla.load()
-        retriver=lla.getLangchainRetriver()
+        retriver=lla.getLangChainRetriver()
         la=llamaRagTools(retriver=retriver)
         tool_bit_searcher =la.getLangchainToolDefinition(name=bit_tool_name,description=bit_tool_description)
         toolsBit= [ tool_bit_searcher ]
@@ -83,7 +83,9 @@ class Conversational:
 
         #  ---------------------------supervisor_chain----------------------------------
         # Create Agent Supervisor
-        members = ["Insight_Researcher","Bit_Support_Searcher" ,"Stock_Helper"]
+        # members = ["Insight_Researcher","Bit_Support_Searcher" ,"Stock_Helper"]
+        members = ["Bit_Support_Searcher" ,"Stock_Helper"]
+
 
         system_prompt_superviser = (
             "As a supervisor, your role is to oversee a dialogue of "
@@ -117,25 +119,28 @@ class Conversational:
         #------------------------------faq searcher----------------------------------------------
 
 
-        Bit_Support_Searcher_agent = create_agent(llm, toolsBit, "You are a support question answer searcher.use bit_FAQ_search tool to find an answer.")
+        Bit_Support_Searcher_agent = create_agent(llm, toolsBit, 
+                """You are a support question answer searcher for bunk application support. 
+                Based on the provided content first identify the list of topics, and what question represent every topic,
+                then use bit_FAQ_search tool to find an answer for every question for each topic one by one.
+                if you found answers be precision with answer and hold all data in answers include phone numbers , hours of work and amounts.
+                if you don't foind answer on any topic give final answer will be that no data found. Be precign and polite as bank agent.       
+                """)
         Bit_Support_Searcher_node = functools.partial(agent_node, agent=Bit_Support_Searcher_agent, name="Bit_Support_Searcher")
 
         #-------------------------------analist node--------------------------------------------------
-        Insight_Researcher_agent = create_agent(llm, toolsWeb_contextParce , 
-                """You are a Insight Researcher. Do step by step. 
-                Based on the provided content first identify the list of topics, and what question represent every topic,
-                then ask those questions  one by one
-                and finally find insights for each topic one by one.
-                Include the insights and sources in the final response
-                """)
-        Insight_Researcher_node = functools.partial(agent_node, agent=Insight_Researcher_agent, name="Insight_Researcher")
+        # Insight_Researcher_agent = create_agent(llm, toolsWeb_contextParce , 
+        #         """You are a Insight Researcher. Do step by step. 
+        #         Based on the provided content first identify the list of topics, and what question represent every topic,
+        #         then ask those questions  one by one
+        #         and finally find insights for each topic one by one.
+        #         Include the insights and sources in the final response
+        #         """)
+        # Insight_Researcher_node = functools.partial(agent_node, agent=Insight_Researcher_agent, name="Insight_Researcher")
 
 
         #-------------------------stock helper (just becouse ve can) ---------------------------------------
-        Stock_Helper_agent = create_agent(llm, toolStock, 
-                """You are a responsable for get stock ticker data. you shold recive symvol  of ticker 
-                and return stock ticker price.
-                """)
+        Stock_Helper_agent = create_agent(llm, toolStock, system_prompt="You are a responsable for get stock ticker data. you shold recive symvol  of ticker and return stock ticker price. ")
         Stock_Helper_node = functools.partial(agent_node, agent=Stock_Helper_agent, name="Stock_Helper")
 
 
@@ -148,7 +153,7 @@ class Conversational:
         workflow = StateGraph(AgentState)
         workflow.add_node("Bit_Support_Searcher", Bit_Support_Searcher_node)
         workflow.add_node("Stock_Helper", Stock_Helper_node)
-        workflow.add_node("Insight_Researcher", Insight_Researcher_node)
+        # workflow.add_node("Insight_Researcher", Insight_Researcher_node)
         workflow.add_node("supervisor", supervisor_chain)
 
         # Define edges
@@ -174,7 +179,10 @@ class Conversational:
         })
         # return json.dumps(response['messages'][1].content, indent=2)
         print(response)
-        return response['messages'][1].content
+        try:
+            return response['messages'][1].content
+        except IndexError:
+            return "לא נמצא תשובה!"
 
 
 

@@ -4,4 +4,11 @@ prompt*
 my-app
 images
 
+*.zip
 
+data
+indexes
+.conda
+images
+my-app
+workflows

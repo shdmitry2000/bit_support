@@ -1,8 +1,12 @@
+# streamlit run web_streamlit.py
+
+import yfinance as yf
 import streamlit as st
-from bit_agent_interface import *
+from bit_agent_interface_history import Conversational
 
-
-
+conversational=Conversational()
+def run_graph(query):
+    return conversational.run_graph(query)
 # print(final_response)
 
 st.title("ChatGPT-like clone")

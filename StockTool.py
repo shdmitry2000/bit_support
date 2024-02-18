@@ -4,23 +4,23 @@ from langchain.agents import initialize_agent,Tool
 from langchain_community.chat_models import ChatOpenAI
 from langchain_community.callbacks import get_openai_callback
 from langchain.tools import tool
-from dotenv import load_dotenv
+
 from langchain import hub
 from langchain.agents import create_react_agent
 from langchain_community.llms import OpenAI
 import yfinance as yf
-import baseToolsHandler
+# import baseToolsHandler
 
-load_dotenv()
+
 
 # Get the prompt to use
 prompt = hub.pull("hwchase17/react")
 
 
-class StockTool(baseToolsHandler.projectBaseTool):
+class StockTool():
 
-    def __init__(self,memory_name="stock_data", withmemory=False) -> None:
-        super().__init__(withmemory)
+    # def __init__(self,memory_name="stock_data", withmemory=False) -> None:
+        # super().__init__(withmemory)
         # OpenAI.api_key =os.environ["OPENAI_API_KEY"]
         
 # Define a tool
@@ -69,8 +69,7 @@ class StockTool(baseToolsHandler.projectBaseTool):
         tools=[self.getToolDefinition()]
         
         agent = initialize_agent(llm=llm,tools= tools,verbose=True,handle_parsing_errors=True)
-        # agent = create_react_agent(llm, [my_tool,getToolDefinition()], prompt)
-
+        
         logging.basicConfig(stream=sys.stdout, level=logging.INFO)
         logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
         

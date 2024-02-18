@@ -56,7 +56,7 @@ from langchain.cache import SQLiteCache
 # from langchain.agents.tools import Tool
 # from langchain import LLMMathChain
 
-from llama_index import ListIndex
+from llama_index.core import ListIndex
 from llama_index.langchain_helpers.memory_wrapper import GPTIndexChatMemory
 import logging
 import sys

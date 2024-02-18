@@ -1,3 +1,5 @@
+
+# uvicorn conversational_api:app --reload
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from fastapi import HTTPException, FastAPI, Response, Depends
