@@ -63,7 +63,6 @@ from llama_index.core import Settings
 
 from typing import List, Optional
 
-load_dotenv()
 
 PERSIST_DIR="./indexes/lama"
 

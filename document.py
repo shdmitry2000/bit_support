@@ -437,6 +437,21 @@ def get_documents() -> List[Document]:
     ]
     return documents
 
+# import csv
+# from typing import List, Tuple
 
+# def get_csv() -> List[Tuple[str, str]]:
+#     csv_data = [
+#         (doc["question"], doc["answer"]) for doc in faqs1
+#     ]
+#     return csv_data
 
+# def save_to_csv(data: List[Tuple[str, str]], filename: str):
+#     with open(filename, 'w', newline='') as csvfile:
+#         writer = csv.writer(csvfile)
+#         writer.writerow(['Question', 'Answer'])  # Write the header
+#         writer.writerows(data)  # Write the data rows
 
+# # Example usage:
+# csv_data = get_csv()
+# save_to_csv(csv_data, 'output.csv')

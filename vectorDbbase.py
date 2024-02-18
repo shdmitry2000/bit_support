@@ -1,9 +1,12 @@
 from abc import abstractmethod
 import os
 from typing import List
+from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 import numpy as np
 
+
+load_dotenv()
 
 class Embeddings():
 
