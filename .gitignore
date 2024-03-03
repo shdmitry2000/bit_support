@@ -6,9 +6,12 @@ images
 
 *.zip
 
+__pycache__
+encoder_cache
+
 data
 indexes*
-encoder_cache
+
 .conda
 images
 my-app
