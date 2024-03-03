@@ -1,6 +1,7 @@
 
 from enum import Enum
 import json
+import traceback
 from dotenv import load_dotenv
 import llama_index
 import numpy as np
@@ -63,6 +64,8 @@ from llama_index.core import Settings
 
 from typing import List, Optional
 
+from excelutility import load_data,getExcelDatainJson
+
 
 PERSIST_DIR="./indexes/lama"
 
@@ -77,7 +80,7 @@ from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.postprocessor import SimilarityPostprocessor
 
-from vectorDbbase import Embeddings,baseVebtorDb
+from vectorDbbase import Embeddings,baseVebtorDb,basevectorDBLlamaIndex
 
 import logging
 # logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -87,10 +90,11 @@ import logging
 load_dotenv()
 # from rag_conversation import chain as rag_conversation_chain
 
-
+# logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+# logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
 
     
-class llamaRag(baseVebtorDb):
+class llamaRag(basevectorDBLlamaIndex):
     
     PERCISTENT_DIRECTORY='./indexes/llama/'
     vectorstore=None
@@ -110,14 +114,7 @@ class llamaRag(baseVebtorDb):
             os.makedirs(persist_dir, exist_ok=True)
             self.storage_context = StorageContext.from_defaults()
 
-
-    @staticmethod
-    def createDocument(index,title,text):
-        from llama_index.core.schema import Document
-        
-        return  Document(id=index, title=title, text= text )
-        
-        
+       
     def build_data(self,documents): 
         # Initialize LlamaIndex
         # Add data to the index
@@ -201,6 +198,8 @@ class llamaRag(baseVebtorDb):
         else:
             return ("No data Found!",None)
         
+    def getVector(self):
+        return self.vectorstore 
         
     def query(self,query: str) -> str:
         if self.query_engine is None:
@@ -225,7 +224,6 @@ class llamaRag(baseVebtorDb):
 
 
 
-
     def add_data(self,documents):
         
         if self.vectorstore is None:
@@ -234,7 +232,7 @@ class llamaRag(baseVebtorDb):
             )
 
         else:
-            self.vectorstore.from_documents(documents,embed_model=self.embedder)
+            self.vectorstore.insert(documents,embed_model=self.embedder)
             
         self.vectorstore.embeddings=self.embedder
         
@@ -243,13 +241,23 @@ class llamaRag(baseVebtorDb):
     def add_text(self,texts):
         index=0
         documents=[]
-        for text in texts:
-            index=index+1
-            documents.append(llamaRag.createDocument(index,title= "title"+str(index),text=text))
+        for i, text in enumerate(texts):
+            
+            documents.append(llamaRag.createDocument(i,title="",text=text))
             # print(documents)
-        print(documents)
+        # print(documents)
         self.add_data(documents)
         
+    def printDb(self):
+        print(self.vectorstore.ref_doc_info)
+        # traceback.print_exc()
+        # doc_info = self.vectorstore.ref_doc_info()  
+        # for doc_i in doc_info:
+        #     # Check if the node has metadata and if it includes entities
+        #     print("doc_info:",doc_i)
+           
+        
+  
     
 def check_embeding(ll,query):
     # ll.load()
@@ -260,31 +268,66 @@ def check_embeding(ll,query):
         get_display(str(ll.data_search(query))))
         # get_display(str(ll.query(query))))
         # get_display(str(ll.data_search_llama(query))))
-        
-def loadDB():
+       
+def buildDocumentsfromFaq(faq):
+    documents=[]
+    ids=baseVebtorDb.getUUID_ID(len(faq))
+    for item,index in zip(faq,ids): 
+        # index=baseVebtorDb.getUUID_ID()[0]
+        document_tmp =llamaRag.createDocument(index=index,title=item['question'],text= " question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n")
+        documents.append(document_tmp)     
+    return documents
+
+
+
+def loadLlamaDB(faqs,myembeder):
     ll=llamaRag(embedder=myembeder)
     ll.delete()
-    index=0
-    documents=[]
-    for item in document.faqs: 
-        index=index+1
-        document_tmp =llamaRag.createDocument(index=index,title=item['question'],text= " question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n")
-                    # str(question_cleaned_string) +"\n"+ str(answer_cleaned_string))
-        documents.append(document_tmp)     
+    documents=buildDocumentsfromFaq(faqs) 
     ll.build_data(documents)
     ll.save()
     
+    
+# def loadLlamaDBInMemory(faqs,myembeder):
+#     ll=llamaRag(embedder=myembeder)
+#     ll.delete()
+#     index=0
+#     documents=documents=loadDocumentsfromFaq(faqs)    
+#     ll.build_data(documents)
+#     return ll
+
+
+def loadlamaDBfromExcel(llamaRag):
+    json_data =  getExcelDatainJson()
+    print("load additional questions to llama index")
+    documents=buildDocumentsfromFaq(json_data) 
+    llamaRag.add_data(documents)    
+    # llamaRag.printDb()
+    return llamaRag  
+
+def getVectorDB(embeding):
+    ll=llamaRag(embedder=embeding)
+    return loadlamaDBfromExcel(ll)      
+           
+
+
 if __name__ == "__main__":         
+
 
     myembeder=Embeddings.getdefaultEmbading()
 
-    # loadDB()
+    # loadLlamaDB(document.faqs,myembeder)
 
+    # ll=loadDatafromExcel(llamaRag(embedder=myembeder))
+    
+    ll=llamaRag(embedder=myembeder)
+    query = "האם אפשר לשלם חשבון בביט"
+    check_embeding(ll,query)
 
     query = "איך אני מקבל תמיכה?"
 
-    check_embeding(llamaRag(embedder=myembeder),query)
+    check_embeding(ll,query)
     
     query = "מיהכן אוספים מטח?"
 
-    check_embeding(llamaRag(embedder=myembeder),query)
+    check_embeding(ll,query)

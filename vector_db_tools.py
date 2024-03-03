@@ -41,7 +41,7 @@ from basetools import projectBaseTool
 
 
 
-class llamaRagTools(basetools.projectBaseTool):
+class RagTools(basetools.projectBaseTool):
 
     rag_chain =None
     

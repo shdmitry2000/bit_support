@@ -1,11 +1,12 @@
 import os
-from typing import List
+from typing import Iterable, List, Optional
 from langchain_community.vectorstores import Chroma
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 import numpy as np
-from vectorDbbase import Embeddings,baseVebtorDb
+from excelutility import getExcelDatainJson
+from vectorDbbase import Embeddings,baseVebtorDb, basevectorDBLangchain
 
 
  
@@ -46,26 +47,53 @@ class faissRag(baseVebtorDb):
         self.vectorstore = FAISS.load_local(persist_directory, embeddings=self.embedder)
         # print(self.vectorstore)
 
-    
+    def delete(self,path=PERCISTENT_DIRECTORY):
+        import shutil
+        if os.path.exists(path):
+            # Use shutil.rmtree() to delete the folder and all its contents
+            shutil.rmtree(path)
+            
+    def getVector(self):
+        return self.vectorstore
+
     def build_data(self,documents):
         
         self.vectorstore = FAISS.from_documents(documents,self.embedder)
         # self.vectorstore.embeddings=self.embedder
         
     def add_data(self,documents):
-        
         if self.vectorstore is None:
             self.vectorstore=FAISS.from_documents(documents,self.embedder)
         else:
-            self.vectorstore.from_documents(documents,self.embedder)
+            texts = [doc.page_content for doc in documents]
+            metadatas = [doc.metadata for doc in documents]
+            self.add_text(texts,metadatas)
             
-        # self.vectorstore.embeddings=self.embedder
+            
+        # self.faiss_vector_store.embeddings=self.embedder
         
-    def add_text(self,texts):
-        documents = [faissRag.createDocument(page_content=text) for text in texts]
-        self.add_data(documents)
-        
+    def add_text(self,texts:Iterable[str],metadatas:Optional[List[dict]] = None):
+        if self.vectorstore is None:
+            if metadatas:
+                documents = [faissRag.createDocument(page_content=text,metadata=metadata) for text,metadata in zip (texts,metadatas)]
+            else:
+                documents = [faissRag.createDocument(page_content=text) for text in texts]
+            self.add_data(documents)
+        else:
+            self.vectorstore.add_texts(
+                texts=texts ,
+                metadatas=metadatas
+            )
     
+    def getVector(self):
+        return self.vectorstore
+    
+        
+    def printDb(self):
+        # Assuming 'index' is your FAISS index and 'docs' is a dictionary mapping IDs to documents
+        for id, doc in self.vectorstore.items():
+            print(f"ID: {id}, Document: {doc}")
+
 
 def check_embeding(ll,query):
     # ll.load()
@@ -75,34 +103,53 @@ def check_embeding(ll,query):
     print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
         get_display(str(ll.data_search(query))))
 
-def loadDB():
-    ll=faissRag(embedder=myembeder)
-    ll.delete()
+
+def loadDocumentsfromFaq(faqs):
     import document
     documents=[]
-    for item in document.faqs: 
-        document_tmp =ll.createDocument(page_content=" question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n",
-            metadata={
-                "question": item['question'],
-            }
+    for item in faqs: 
+        document_tmp =basevectorDBLangchain.createDocument(page_content=" question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n",
+            metadata= "question"+ item['question']
+            
         )
-        documents.append(document_tmp)    
-         
+        documents.append(document_tmp)   
+        
+    return documents    
+        
+      
+
+def loadfaissDB(faqs,myembeder):
+    ll=faissRag(embedder=myembeder)
+    ll.delete()
+    documents=loadDocumentsfromFaq(faqs)
     ll.build_data(documents)
-    ll.build_data(documents=document.get_documents())
     ll.save() 
+    
+def loadfaissDBfromExcel(faissRag):
+    json_data =  getExcelDatainJson()
+    print("load additional questions to feiss")
+    documents=loadDocumentsfromFaq(json_data) 
+    faissRag.add_data(documents)    
+    # faissRag.printDb()
+    return faissRag  
+
+def getVectorDB(embeding):
+    ll=faissRag(embedder=embeding)
+    return loadfaissDBfromExcel(ll)   
+
+ 
 if __name__ == "__main__":         
 
     myembeder=Embeddings.getdefaultEmbading()
 
-    # loadDB()
+    # loadfaissDB(document.faqs,myembeder)
     
-    
+    ll=faissRag(embedder=myembeder)
 
     query = "איך אני מקבל תמיכה?"
 
-    check_embeding(faissRag(embedder=myembeder),query)
+    check_embeding(ll,query)
     
     query = "מיהכן אוספים מטח?"
 
-    check_embeding(faissRag(embedder=myembeder),query)
+    check_embeding(ll,query)

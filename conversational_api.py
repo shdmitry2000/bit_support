@@ -1,5 +1,6 @@
 
 # uvicorn conversational_api:app --reload
+import os
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from fastapi import HTTPException, FastAPI, Response, Depends
@@ -12,7 +13,16 @@ from fastapi_sessions.frontends.implementations import SessionCookie, CookiePara
 from typing import Dict, List, Union
 import bit_agent_interface_history
 
+import pandas as pd
+from excelutility import load_data,EXCEL_FILE
+from utility import *
+import traceback
+
+from vector_dbs import VectorDatabaseDAO
+
+
 load_dotenv()
+
 
 
 server_storage = {}
@@ -86,6 +96,12 @@ verifier = BasicVerifier(
     backend=backend,
     auth_http_exception=HTTPException(status_code=403, detail="invalid session"),
 )
+
+class Record(BaseModel):
+    question: str
+    answer: str
+
+
 
 app = FastAPI()
 
@@ -161,3 +177,67 @@ async def say(conversation:Conversation,session_uid:UUID = None):
     res=qa.invoke(input=conversation.question)
     print("res",res)
     return {"question":conversation.question,"answer":res}
+
+
+
+#----------------------------------------------------------excel -----qquestions---
+
+
+async def load_data_async(file_path=EXCEL_FILE):
+    loop = asyncio.get_running_loop()
+    df = await loop.run_in_executor(None, load_data, file_path)
+    return df
+
+@app.get("/additional_questions")
+
+async def get_questions():
+    df = await load_data_async(file_path=EXCEL_FILE)
+    return df.to_dict(orient='records')
+
+@app.post("/additional_questions")
+async def add_question(record: Record):
+    df = await load_data_async(file_path=EXCEL_FILE)
+    if record.question in df['question'].values:
+        raise HTTPException(status_code=400, detail="Question already exists")
+    # df = df.append({'question': record.question, 'answer': record.answer}, ignore_index=True)
+    df = pd.concat([df, pd.DataFrame([{'question': record.question, 'answer': record.answer}])], ignore_index=True)
+    df.to_excel(EXCEL_FILE, index=False)
+    VectorDatabaseDAO().reset()
+    return {"status": "success"}
+
+@app.delete("/additional_questions/{question}")
+async def delete_question(question: str):
+    df = await load_data_async(file_path=EXCEL_FILE)
+    
+    if question not in df['question'].values:
+        raise HTTPException(status_code=404, detail="Question not found")
+    df = df[df['question'] != question]
+    df.to_excel(EXCEL_FILE, index=False)
+    VectorDatabaseDAO().reset()
+    return {"status": "success"}
+
+
+
+#  symantic search ----------------------------------
+@app.get("/symantic_search/")
+async def symantec_search_api(input_string: str):
+    try:
+        # Generate documents based on the input string
+        conversational=bit_agent_interface_history.Conversational()
+        return conversational.symantec_search(input_string)
+        
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": str(e)}
+    
+    
+@app.get("/query_symantic_search_with_score/")
+async def query_symantic_search_with_score(input_string: str):
+    try:
+        # Generate documents based on the input string
+        conversational=bit_agent_interface_history.Conversational()
+        return conversational.query_symantec_search_with_score(input_string)
+        
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": str(e)}

@@ -1,21 +1,22 @@
 # # Load HTML
 import json
-from llama_index.schema import Document
+
 
 import os
 from bs4 import BeautifulSoup
 from langchain_community.document_loaders import AsyncChromiumLoader
 import re
-from langchain_openai import OpenAI
+# from langchain_openai import OpenAI
 # from langchain.index import LlamaIndex
-from llama_index import LLMPredictor, download_loader, VectorStoreIndex, ServiceContext
-from llama_index import GPTVectorStoreIndex, ServiceContext ,Document 
-from llama_index import download_loader
+# from llama_index import LLMPredictor, download_loader, VectorStoreIndex, ServiceContext
+# from llama_index import GPTVectorStoreIndex, ServiceContext ,Document 
+# from llama_index import download_loader
 
 
-from llama_index import PromptHelper
+# from llama_index import PromptHelper
 from dotenv import load_dotenv
-import vector_faiss_dbs
+# import vector_faiss_dbs
+from excelutility import *
 
 load_dotenv()
 
@@ -28,6 +29,7 @@ faq_divs = soup.select('.faq-single.get-func')
 
 # List to store all FAQ pairs
 faqs = []
+faqsc = []
 documents=[]
 index=0
 
@@ -55,11 +57,11 @@ for div in faq_divs:
     }
     
     
-    index=index+1
-    document = Document(id=index, title=question, 
-                        text= " question : "+ str( question) +" \n answer : "+ str(answer)+ "\n" )
-                        # str(question_cleaned_string) +"\n"+ str(answer_cleaned_string))
-    documents.append(document)
+    # index=index+1
+    # document = Document(id=index, title=question, 
+    #                     text= " question : "+ str( question) +" \n answer : "+ str(answer)+ "\n" )
+    #                     # str(question_cleaned_string) +"\n"+ str(answer_cleaned_string))
+    # documents.append(document)
     
     
     # text= json.dumps(faq_pair),
@@ -67,124 +69,44 @@ for div in faq_divs:
     # docsearch = Chroma.add_texts(text, embeddings)
     
     # faqs.append(faq_pair)
-    faqs.append(faq_pair_cleaned_string)
-
+    faqsc.append(faq_pair_cleaned_string)
     
-# create_llama_index(documents)
-# create_faiss_index(documents)
-# create_croma_index(documents)
+    faqs.append(faq_pair)
+
+from vectorDBLlama import llamaRag,loadLlamaDB,Embeddings
+from vectorDBFaiss import faissRag,loadfaissDB
+from vectorDBChroma import chromaRag,loadChromaDB
 
 
 
-ll=vector_faiss_dbs.llamaRag(embedder=vector_faiss_dbs.Embeddings.getdefaultEmbading())
-ll.delete()
-ll.build_data(documents)
+myembeder=Embeddings.getdefaultEmbading()
 
-ll.save()
 
-# Query the index
-query = "מיהכן אוספים מטח?"
-
+# loadfaissDB(faqs,myembeder)
+# loadLlamaDB(faqs,myembeder)
     
-query_engine = ll.as_query_engine()
-response = query_engine.query(query)
-from bidi.algorithm import get_display
+# loadChromaDB(faqs,myembeder)
+# loadRedisDB(faqs,myembeder)
 
-print(get_display(str(response)))
-
-
-query = "מי נותן תמיכה?"
-
-    
-response = query_engine.query(query)
-print(get_display(str(response)))
+save_data(faqs)
 
 
-# def create_croma_index(ask):
-#     fdb= indexdb.Chromaindexdb()
-    
+# import csv
+# from typing import List, Tuple
 
+# def get_csv() -> List[Tuple[str, str]]:
+#     csv_data = [
+#         (doc["question"], doc["answer"]) for doc in faqs
+#     ]
+#     return csv_data
 
+# def save_to_csv(data: List[Tuple[str, str]], filename: str):
+#     with open(filename, 'w', newline='') as csvfile:
+#         writer = csv.writer(csvfile)
+#         writer.writerow(['Question', 'Answer'])  # Write the header
+#         writer.writerows(data)  # Write the data rows
 
-#     from langchain_core.documents import Document
-#     Documents=[]
-#     for d in ask:
-#         Documents.append(Document(page_content=d.text,metadata={'source': '/Users/dmitryshlymovich/workspace/chatgpt/tests/XpayFinance_LLM/data/data.json'}))
-        
+# # Example usage:
+# csv_data = get_csv()
+# save_to_csv(csv_data, 'output.csv')
 
-   
-    
-#     fdb.create_db(Documents)
-    
-    
-#     from bidi.algorithm import get_display
-
-    
-    
-    
-#     query = "מיהכן אוספים מטח?"
-
-#     faissdb=fdb.getDb()
-    
-#     docs = faissdb.similarity_search(query)
-#     print("answer",get_display(str(docs[0])))
-
-      
-#     # from bidi.algorithm import get_display
-
-#     # print(get_display(str(response)))
-
-
-#     query = "מי נותן תמיכה?"
-
-        
-#     docs = faissdb.similarity_search(query)
-#     print("answer",get_display(str(docs[0])))
-    
-# def create_faiss_index(ask):
-#     fdb= indexdb.Faissindexdb()
-    
-#     # data_dict = json.loads(faq_pair)
-
-#     # JsonDataReader = download_loader("JsonDataReader")
-#     # loader = JsonDataReader()
-#     # documents = loader.load_data(faq_pair)
-#     # index = VectorStoreIndex.from_documents(documents)
-
-
-#     # from langchain_core.documents import Document
-#     # Documents=[]
-#     # for d in ask:
-#     #     Documents.append(Document(page_content=d.text,metadata={'source': '/Users/dmitryshlymovich/workspace/chatgpt/tests/XpayFinance_LLM/data/data.json'}))
-        
-
-   
-    
-#     # fdb.create_db(Documents)
-    
-    
-#     from bidi.algorithm import get_display
-
-    
-    
-    
-#     query = "מיהכן אוספים מטח?"
-
-#     faissdb=fdb.getDb()
-    
-#     docs = faissdb.similarity_search(query)
-#     print("answer",get_display(str(docs[0])))
-
-      
-#     # from bidi.algorithm import get_display
-
-#     # print(get_display(str(response)))
-
-
-#     query = "מי נותן תמיכה?"
-
-        
-#     docs = faissdb.similarity_search(query)
-#     print("answer",get_display(str(docs[0])))
-    
-    

@@ -25,7 +25,7 @@ class LlamaIndexRetriever(BaseRetriever):
     """Keyword arguments to pass to the query method."""
 
     embedding: Any
-    def _get_relevant_documents(
+    def _get_relevant_documents_ret(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
         """Get documents relevant for a query."""

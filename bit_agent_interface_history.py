@@ -13,22 +13,43 @@ from langchain.tools import tool
 from langchain_openai import ChatOpenAI
 from typing import Annotated, Any, Dict, List, Optional, Sequence, TypedDict, Union
 import StockTool
+from vectorDbbase import baseVebtorDb
 from vector_db_tools import *
 from vector_dbs import *
-
+import pandas as pd
+from utility import syncdecorator
 from langchain_core.runnables.config import (
     RunnableConfig,
 )
 
+from excelutility import load_data
 
+
+
+# vectors.add_data()
 # {'question': "My name's bob. How are you?", 'chat_history': [HumanMessage(content="My name's bob. How are you?", additional_kwargs={}, example=False), AIMessage(content="I'm doing well, thank you. How can I assist you today, Bob?", additional_kwargs={}, example=False)], 'answer': "I'm doing well, thank you. How can I assist you today, Bob?"}
 
     
 class Conversational:
+    
+    vectors=None
+    myembeder=Embeddings.getdefaultEmbading()
+    
+
+    # @syncdecorator
+    # async def load_db_data(self):
+    #     return await load_data()
+    def getVector(self):
+    
+
+        return VectorDatabaseDAO(self.myembeder).getVector()
+        
+
+
     def __init__(self) -> None:
        
             # Initialize model
-        llm = ChatOpenAI(model="gpt-4-turbo-preview")
+        llm = ChatOpenAI(model="gpt-4-turbo-preview",temperature=0.7)
 
         logging.basicConfig(stream=sys.stdout, level=logging.INFO)
         logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
@@ -40,10 +61,10 @@ class Conversational:
         bit_tool_description="Useful for founding answers for  questions about bit application"
         bit_tool_name="bit_FAQ_search"
 
-        lla=vector_dbs.llamaRag(embedder=vector_dbs.Embeddings.getdefaultEmbading())
+        # lla=vector_dbs.llamaRag(embedder=vector_dbs.Embeddings.getdefaultEmbading())
         # lla.load()
-        retriver=lla.getLangChainRetriver()
-        la=llamaRagTools(retriver=retriver)
+        retriver=self.getVector().getLangChainRetriver()
+        la=RagTools(retriver=retriver)
         tool_bit_searcher =la.getLangchainToolDefinition(name=bit_tool_name,description=bit_tool_description)
         toolsBit= [ tool_bit_searcher ]
         #----------stock tools ------------------------------------
@@ -84,18 +105,46 @@ class Conversational:
         #  ---------------------------supervisor_chain----------------------------------
         # Create Agent Supervisor
         # members = ["Insight_Researcher","Bit_Support_Searcher" ,"Stock_Helper"]
-        members = ["Bit_Support_Searcher" ,"Stock_Helper"]
-
+        members = ["Bit_Support_Searcher" ]
 
         system_prompt_superviser = (
-            "As a supervisor, your role is to oversee a dialogue of "
-            " workers: {members}. Based on the user's request,"
-            " determine which worker should take the next action in need any. Each worker is responsible for"
-            " executing a specific task and reporting back their findings and progress. Once all tasks are complete,"
-            " indicate with 'FINISH'."
+                """
+            You are the supervisor overseeing a dynamic team of specialized workers, each with unique capabilities, identified as: {members}. Your role is to manage and direct the flow of a conversation based on a user's request. Evaluate the request, decide which worker is best suited to address it, and assign the task to them. Here’s how to proceed:
+    
+            Evaluate the User Request: Carefully read the user's request. Consider the skills and expertise of your team members when deciding who is best equipped to handle it.
+            
+            Assign the Task: Respond with the name of the worker who should act next, based on the nature of the user's request and the worker's specialization.
+            
+            Monitor Progress: Each worker will complete their task and update you with their results and status. If the task requires input from another worker, repeat the evaluation and assignment process.
+            
+            Conclude the Conversation:
+            
+            If all relevant queries are addressed and no further action is required, conclude the interaction with "FINISH".
+            In scenarios where the user inquires about services or information outside our scope (such as PAYBOX, other apps, or banks unrelated to Bit), use the specific closing statement: "FINISH: return   לא נמצאה תושבה מתאימה לשאלה זו"
+            Your goal is to ensure efficient and accurate handling of the user's request, leveraging the collective expertise of your team.
+            """)
 
-        )
+        #
+        # system_prompt_superviser = (
+        #     """You are a supervisor tasked with managing a conversation between the
+        #      following workers:  {members}. Given the following user request,
+        #      respond with the worker to act next. Each worker will perform a
+        #      task and respond with their results and status.
+        #      and When finished,respond with FINISH.
+        #
+        #      If you asked on PAYBOX or other apps or other banks and not bit,  follow final answer text:
+        #      FINISH:that you are a chatbot of the Bit app and do not know how to answer these topics."""
+        # )
 
+
+        # system_prompt_superviser = (
+        #         "You are a supervisor tasked with managing a conversation between the"
+        #         " following workers:  {members}. Given the following user request,"
+        #         " respond with the worker to act next. Each worker will perform a"
+        #         " task and respond with their results and status. "
+        #         "When finished,"
+        #         " respond with FINISH."
+        #     )
         options = ["FINISH"] + members
         function_def = {
             "name": "route",
@@ -119,13 +168,23 @@ class Conversational:
         #------------------------------faq searcher----------------------------------------------
 
 
-        Bit_Support_Searcher_agent = create_agent(llm, toolsBit, 
-                """You are a support question answer searcher for bunk application support. 
-                Based on the provided content first identify the list of topics, and what question represent every topic,
-                then use bit_FAQ_search tool to find an answer for every question for each topic one by one.
-                if you found answers be precision with answer and hold all data in answers include phone numbers , hours of work and amounts.
-                if you don't foind answer on any topic give final answer will be that no data found. Be precign and polite as bank agent.       
-                """)
+        # Bit_Support_Searcher_agent = create_agent(llm, toolsBit,
+        #         """You are a support question answer searcher for bank application support.
+        #         Based on the provided content first identify the list of topics, and what question represent every topic,
+        #         then use bit_FAQ_search tool to find an answer for every question for each topic one by one.
+        #         if you found answers be precision with answer and hold all data in answers include phone numbers , hours of work and amounts.
+        #         if you don't found answer on any topic give final answer:
+        #          will be that no data found. Be precign and polite as bank agent.
+        #         """)
+        Bit_Support_Searcher_agent = create_agent(llm, toolsBit,
+                      """You are a support question answer searcher for bank application support. 
+                      Based on the provided content first identify the list of topics, and what question represent every topic,
+                      then use bit_FAQ_search tool to find an answer for every question for each topic one by one.
+                      if you found answers be precision with answer and hold all data in answers include phone numbers , hours of work and amounts.
+                      if you don't found answer on any topic give final answer:
+                       ניתן לפנות אלינו בטלפון 6428*
+                    א'-ה' - 9:00-17:00 | ו' וערבי חג - 8:30-13:00      
+                          """)
         Bit_Support_Searcher_node = functools.partial(agent_node, agent=Bit_Support_Searcher_agent, name="Bit_Support_Searcher")
 
         #-------------------------------analist node--------------------------------------------------
@@ -152,7 +211,7 @@ class Conversational:
 
         workflow = StateGraph(AgentState)
         workflow.add_node("Bit_Support_Searcher", Bit_Support_Searcher_node)
-        workflow.add_node("Stock_Helper", Stock_Helper_node)
+       # workflow.add_node("Stock_Helper", Stock_Helper_node)
         # workflow.add_node("Insight_Researcher", Insight_Researcher_node)
         workflow.add_node("supervisor", supervisor_chain)
 
@@ -170,7 +229,12 @@ class Conversational:
         # -----------------------------end of definition----------------------
 
 
-
+    def symantec_search(self,search_str:str):
+        return self.getVector().data_search(search_str)
+    
+    def query_symantec_search_with_score(self,search_str:str):
+        return self.getVector().query(search_str)
+    
     def run_graph(self,input_message:str):
         # print("input_message",input_message)
         # history_trank=history

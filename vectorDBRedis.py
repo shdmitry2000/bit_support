@@ -1,10 +1,12 @@
 import os
 from typing import List
-from langchain_community.vectorstores import redis
+# from langchain_community.vectorstores import redis
+from langchain_community.vectorstores.redis import Redis
 from langchain_core.documents import Document
 import numpy as np
+from excelutility import getExcelDatainJson
 
-from vectorDbbase import Embeddings,baseVebtorDb
+from vectorDbbase import Embeddings,baseVebtorDb, basevectorDBLangchain
 
 
 
@@ -20,8 +22,10 @@ class redisRag(baseVebtorDb):
         self.embedder=embedder
         self.redis_url = redis_url
         self.index_name = index_name
+        
+        self.load()
    
-        # self.rds = redis.Redis.from_url(self.redis_url)
+        # self.rds = Redis.from_url(self.redis_url)
 
         
 
@@ -47,24 +51,25 @@ class redisRag(baseVebtorDb):
             
             
           
-     
+    def getVector(self):
+        return self.rds
         
     # Load FAISS index from disk
-    def load(self,persist_directory=PERCISTENT_DIRECTORY):
-        self.rds = redis.from_existing_index(
+    def load(self,persist_directory="./redis"):
+        self.rds = Redis.from_existing_index(
             self.embedder,
             index_name=self.index_name,
             redis_url=self.redis_url,
             schema=self.redis_schema,
         )
         
-    def delete(self,path="./indexes/chroma/"):
-        redis.drop_index(
+    def delete(self,path):
+        Redis.drop_index(
             index_name=self.index_name, delete_documents=True, redis_url=self.redis_url )
 
             
     def build_data(self,documents):
-         self.rds = redis.Redis.from_documents(
+        self.rds = Redis.from_documents(
             documents,
             self.embedder,
             redis_url=self.redis_url,
@@ -76,7 +81,7 @@ class redisRag(baseVebtorDb):
         
     def add_data(self,documents):
         
-        self.rds = redis.Redis.from_documents(
+        self.rds = Redis.from_documents(
             documents,
             self.embedder,
             redis_url=self.redis_url,
@@ -84,7 +89,7 @@ class redisRag(baseVebtorDb):
         )
         
     def add_text(self,texts):
-        documents = [chromaRag.createDocument(page_content=text) for text in texts]
+        documents = [basevectorDBLangchain.createDocument(page_content=text) for text in texts]
         self.add_data(documents)
         
     def process_results(self, results):
@@ -109,27 +114,46 @@ def check_embeding(ll,query):
     print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
         get_display(str(ll.data_search(query))))
     
-def buildDB():
-    ll=redisRag(embedder=myembeder)
-    ll.delete()
+def loadDocumentsfromFaq(faqs):
     import document
     documents=[]
-    for item in document.faqs: 
-        document_tmp =ll.createDocument(page_content=" question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n",
+    for item in faqs: 
+        document_tmp =basevectorDBLangchain.createDocument(page_content=" question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n",
             metadata= "question"+ item['question']
             
         )
-        documents.append(document_tmp)    
-         
+        documents.append(document_tmp)   
+        
+    return documents    
+        
+      
+
+def loadRedisDB(faqs,myembeder):
+    ll=redisRag(embedder=myembeder)
+    ll.delete()
+    documents=loadDocumentsfromFaq(faqs)
     ll.build_data(documents)
-    ll.build_data(documents=document.get_documents())
     ll.save() 
     
+    
+def loadRedisDBfromExcel(redisRag):
+    json_data =  getExcelDatainJson()
+    print("load additional questions to redis")
+    documents=loadDocumentsfromFaq(json_data) 
+    redisRag.add_data(documents)    
+    # redisRag.printDb()
+    return redisRag 
+
+
+def getVectorDB(embeding):
+    ll=redisRag(embedder=embeding)
+    return loadRedisDBfromExcel(ll)  
+
 if __name__ == "__main__":         
 
     myembeder=Embeddings.getdefaultEmbading()
 
-    # buildDB()
+    loadRedisDB(document.faqs,myembeder)
     
 
     query = "איך אני מקבל תמיכה?"
