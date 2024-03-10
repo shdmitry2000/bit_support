@@ -6,19 +6,19 @@ from langchain_core.documents import Document
 import numpy as np
 from excelutility import getExcelDatainJson
 
-from vectorDbbase import Embeddings,baseVebtorDb, basevectorDBLangchain
+from vectorDbbase import Embeddings,baseVebtorDb, basevectorDBLangchain,baseToolsCreater
 
 
 
 
     
-class redisRag(baseVebtorDb):
+class redisRag(baseVebtorDb,baseToolsCreater):
     
    
     redis_schema="redis_schema.yaml"
     
     
-    def __init__(self, redis_url="redis://localhost:6379", index_name="bit" ,embedder=Embeddings.getdefaultEmbading()) -> None:
+    def __init__(self, redis_url="redis://localhost:6379", index_name="bit" ,embedder=Embeddings().getdefaultEmbading()) -> None:
         self.embedder=embedder
         self.redis_url = redis_url
         self.index_name = index_name
@@ -104,8 +104,12 @@ class redisRag(baseVebtorDb):
         return processed_results
 
     
-
-
+    #-------------------------tools session ----------------------------------
+    
+    def getRetriverToolFactory():
+        return self.getLangChainRetriver()
+        
+    
 def check_embeding(ll,query):
     # ll.load()
     from bidi.algorithm import get_display
@@ -113,7 +117,18 @@ def check_embeding(ll,query):
 
     print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
         get_display(str(ll.data_search(query))))
-    
+
+def check_embeding_query(ll,query):
+    # ll.load()
+    from bidi.algorithm import get_display
+
+
+    print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
+        # get_display(str(ll.data_search(query))))
+        get_display(str(ll.query(query))))
+        # get_display(str(ll.data_search_llama(query))))
+       
+        
 def loadDocumentsfromFaq(faqs):
     import document
     documents=[]
@@ -151,9 +166,9 @@ def getVectorDB(embeding):
 
 if __name__ == "__main__":         
 
-    myembeder=Embeddings.getdefaultEmbading()
+    myembeder=Embeddings().getdefaultEmbading()
 
-    loadRedisDB(document.faqs,myembeder)
+    ll=getVectorDB(myembeder)
     
 
     query = "איך אני מקבל תמיכה?"

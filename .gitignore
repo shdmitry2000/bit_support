@@ -16,3 +16,5 @@ indexes*
 images
 my-app
 workflows
+
+*.old

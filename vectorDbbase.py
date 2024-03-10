@@ -9,6 +9,7 @@ import numpy as np
 from chromadb.utils import embedding_functions
 from sentence_transformers import SentenceTransformer, util
 from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
+from langchain.tools.retriever import create_retriever_tool
 from ast import List
 from typing import Any, Dict, Optional, Union
 
@@ -16,6 +17,7 @@ import chromadb
 import sentence_transformers
 
 EMBEDDING_MODEL='intfloat/multilingual-e5-large'
+# EMBEDDING_MODEL='onlplab/alephbert-base'
 # less good
 #  "all-MiniLM-L6-v2",
 #less good
@@ -28,26 +30,26 @@ EMBEDDING_MODEL='intfloat/multilingual-e5-large'
 load_dotenv()
 
 
-class HebSentenceTransformerEmbeddingFunction(embedding_functions.SentenceTransformerEmbeddingFunction):
+# class HebSentenceTransformerEmbeddingFunction(embedding_functions.SentenceTransformerEmbeddingFunction):
 
-    # If you have a beefier machine, try "gtr-t5-large".
-    # for a full list of options: https://huggingface.co/sentence-transformers, https://www.sbert.net/docs/pretrained_models.html
-    def __init__(
-        self,
-        model_name: str = EMBEDDING_MODEL ,
-        device: str = "cpu",
-        normalize_embeddings: bool = False,
-    ):
-        if model_name not in self.models:
-            try:
-                from sentence_transformers import SentenceTransformer
-            except ImportError:
-                raise ValueError(
-                    "The sentence_transformers python package is not installed. Please install it with `pip install sentence_transformers`"
-                )
-            self.models[model_name] = SentenceTransformer(model_name, device=device,cache_folder="./encoder_cache/")
-        self._model = self.models[model_name]
-        self._normalize_embeddings = normalize_embeddings
+#     # If you have a beefier machine, try "gtr-t5-large".
+#     # for a full list of options: https://huggingface.co/sentence-transformers, https://www.sbert.net/docs/pretrained_models.html
+#     def __init__(
+#         self,
+#         model_name: str = EMBEDDING_MODEL ,
+#         device: str = "cpu",
+#         normalize_embeddings: bool = False,
+#     ):
+#         if model_name not in self.models:
+#             try:
+#                 from sentence_transformers import SentenceTransformer
+#             except ImportError:
+#                 raise ValueError(
+#                     "The sentence_transformers python package is not installed. Please install it with `pip install sentence_transformers`"
+#                 )
+#             self.models[model_name] = SentenceTransformer(model_name, device=device,cache_folder="./encoder_cache/")
+#         self._model = self.models[model_name]
+#         self._normalize_embeddings = normalize_embeddings
 
 
 
@@ -63,36 +65,52 @@ class HebSentenceTransformerEmbeddings(HuggingFaceEmbeddings):
 
 
 # from chromadb import  Documents, EmbeddingFunction , Embeddings
-class HebChromaEmbeddingFunction(chromadb.EmbeddingFunction[chromadb.Documents]):
-    # model = SentenceTransformer('dicta-il/dictabert-seg',cache_folder="./encoder_cache/")
-    model = SentenceTransformer(EMBEDDING_MODEL,cache_folder="./encoder_cache/")
-    # model = SentenceTransformer('intfloat/multilingual-e5-large',cache_folder="./encoder_cache/")
-    # model = SentenceTransformer(model_name_or_path='imvladikon/sentence-transformers-alephbert' ,cache_folder="./encoder_cache/")
+# class HebChromaEmbeddingFunction(chromadb.EmbeddingFunction[chromadb.Documents]):
+#     # model = SentenceTransformer('dicta-il/dictabert-seg',cache_folder="./encoder_cache/")
+#     model = SentenceTransformer(EMBEDDING_MODEL,cache_folder="./encoder_cache/")
+#     # model = SentenceTransformer('intfloat/multilingual-e5-large',cache_folder="./encoder_cache/")
+#     # model = SentenceTransformer(model_name_or_path='imvladikon/sentence-transformers-alephbert' ,cache_folder="./encoder_cache/")
     
-    def getEmbeddingModel(self):
-        return self.model
+#     def getEmbeddingModel(self):
+#         return self.model
     
-    def embed(self, input: Union[str, list[str]]) -> chromadb.Embeddings:
-        if isinstance(input, str):
-            input = [input]
-        return self.getEmbeddingModel().encode(input)
+#     def embed(self, input: Union[str, list[str]]) -> chromadb.Embeddings:
+#         if isinstance(input, str):
+#             input = [input]
+#         return self.getEmbeddingModel().encode(input)
     
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        """Embed search docs."""
-        return self.getEmbeddingModel().encode(texts)
+#     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+#         """Embed search docs."""
+#         return self.getEmbeddingModel().encode(texts)
     
-    def __call__(self, input: chromadb.Documents) -> chromadb.Embeddings:
-        # embed the documents somehow
-        return self.embed(input)
+#     def __call__(self, input: chromadb.Documents) -> chromadb.Embeddings:
+#         # embed the documents somehow
+#         return self.embed(input)
 
+class SingletonBase:
+    _instances = {}
+
+    HebdefaultEmbadding=None 
+    
+    def __new__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            instance = super().__new__(cls)
+            cls._instances[cls] = instance
+        return cls._instances[cls]
+    
 
     
-class Embeddings():
-
-    @staticmethod  
-    def getdefaultEmbading():
-        return Embeddings.getHebSentenceTransformerEmbeddings()
+class Embeddings(SingletonBase):
+    def __init__(self):
+        if self.HebdefaultEmbadding is None:
+            self.HebdefaultEmbadding=HebSentenceTransformerEmbeddings()
     
+    def getdefaultEmbading(self):
+        return self.getHebSentenceTransformerEmbeddings()
+    
+    def getHebSentenceTransformerEmbeddings(self):
+        return self.HebdefaultEmbadding
+  
     @staticmethod       
     def getOpenAiEmbadings():
         return OpenAIEmbeddings(model="text-embedding-ada-002")
@@ -104,38 +122,30 @@ class Embeddings():
     @staticmethod       
     def getOpenAi3LargeEmbadings():
         return OpenAIEmbeddings(model="text-embedding-3-large")
-    @staticmethod  
+    # @staticmethod  
     # def getHebEembedding():
     #     return SentenceTransformerEmbeddings(model_name="dicta-il/dictabert-seg")
 
-    @staticmethod 
-    def getHebSentenceTransformerEmbeddings():
-        #return HebSentenceTransformerEmbeddings(model_name='intfloat/multilingual-e5-large',cache_folder= "./encoder_cache/")
-        # return HebSentenceTransformerEmbeddings(model_name='Salesforce/SFR-Embedding-Mistral',cache_folder= "./encoder_cache/")
-        return HebSentenceTransformerEmbeddings()
-    @staticmethod 
-    def getHebSentenceTransformerEmbeddingFunction():      
-        return  HebSentenceTransformerEmbeddingFunction()
+    
+    
+    
+     
+   
+    # @staticmethod 
+    # def getHebSentenceTransformerEmbeddingFunction():      
+    #     return  HebSentenceTransformerEmbeddingFunction()
   
     
-    @staticmethod 
-    def getHebChromaEmbeddingFunction():
-        return HebChromaEmbeddingFunction()
+    # @staticmethod 
+    # def getHebChromaEmbeddingFunction():
+    #     return HebChromaEmbeddingFunction()
     
-# documents=[]
-# document_tmp = createDocument(metadata='question',page_content= " i am happy")
-# documents.append(document_tmp) 
-
-# db_openAIEmbedd = FAISS.from_documents(documents, Embeddings.getdefaultEmbading())
-# retriever_openai = db_openAIEmbedd.as_retriever(search_kwargs={"k": 3})
-
-
     
 class baseVebtorDb():
     
     PERCISTENT_DIRECTORY="./indexes/base/"
     
-    def __init__(self, persist_dir,embedder=Embeddings.getdefaultEmbading()) -> None:
+    def __init__(self, persist_dir,embedder=Embeddings().getdefaultEmbading()) -> None:
         self.embedder=embedder
         if os.path.exists(f"{persist_dir}"):
             self.load(persist_directory=persist_dir)
@@ -154,6 +164,7 @@ class baseVebtorDb():
         # Get the retriever configured to return source documents
         retriever = self.getLangChainRetriver()
         
+        # print("retriever",retriever)
         # self.asimilarity_search_with_score_by_vector
         docs = retriever.get_relevant_documents(query,embedding=self.embedder) #,metadatas=metadatas_list
 
@@ -249,10 +260,18 @@ class basevectorDBLlamaIndex(baseVebtorDb):
     
     
         
-        
-    # @staticmethod
-    # def createDocument(index,title,text):
-    #     from llama_index.core.schema import Document
-        
-    #     return  Document(id=index, title=title, text= text )
-     
+class baseToolsCreater():
+    
+    @abstractmethod
+    def getRetriverToolFactory(self):
+        pass
+    
+    def getLangchainToolDefinition(self ,name,description,retriver_tool_factory=None):
+            if retriver_tool_factory is None:
+                    retriver_tool_factory=self.getRetriverToolFactory()
+                    
+            return  create_retriever_tool( 
+                retriever=retriver_tool_factory,
+                name=name,
+                description=description,
+                )

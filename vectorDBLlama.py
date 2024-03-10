@@ -11,7 +11,10 @@ import os,sys
 from typing import List, Optional
 
 # from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAI, OpenAIEmbeddings
+import langchain_core.documents 
+# from langchain_core.documents import Document
+from llama_index.core.schema import NodeRelationship
 import numpy as np
 # import document
 
@@ -23,7 +26,7 @@ import llama_index
 import numpy as np
 import torch
 
-import document
+# import document
 
 import abc
 import os
@@ -32,7 +35,7 @@ import json
 from dotenv import load_dotenv
 
 
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader,SimpleKeywordTableIndex
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader,SimpleKeywordTableIndex ,get_response_synthesizer
 from llama_index.core import StorageContext, load_index_from_storage
 from llama_index.core import StorageContext
 from llama_index.core import QueryBundle
@@ -40,7 +43,7 @@ from llama_index.core import QueryBundle
 # import NodeWithScore
 from llama_index.core.schema import NodeWithScore
 
-from llama_index.core import VectorStoreIndex, get_response_synthesizer
+
 from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.postprocessor import SimilarityPostprocessor
@@ -80,12 +83,16 @@ from llama_index.core.retrievers import VectorIndexRetriever
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.postprocessor import SimilarityPostprocessor
 
-from vectorDbbase import Embeddings,baseVebtorDb,basevectorDBLlamaIndex
+from vectorDbbase import Embeddings, baseToolsCreater,baseVebtorDb,basevectorDBLlamaIndex
+
+#---------------tools-------------
+import langchain.tools
 
 import logging
 # logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 # logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
-        
+
+    
 
 load_dotenv()
 # from rag_conversation import chain as rag_conversation_chain
@@ -94,7 +101,7 @@ load_dotenv()
 # logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
 
     
-class llamaRag(basevectorDBLlamaIndex):
+class llamaRag(basevectorDBLlamaIndex,baseToolsCreater):
     
     PERCISTENT_DIRECTORY='./indexes/llama/'
     vectorstore=None
@@ -102,7 +109,7 @@ class llamaRag(basevectorDBLlamaIndex):
     
     
     
-    def __init__(self,persist_dir=PERCISTENT_DIRECTORY,embedder=Embeddings.getdefaultEmbading()) -> None:
+    def __init__(self,persist_dir=PERCISTENT_DIRECTORY,embedder=Embeddings().getdefaultEmbading()) -> None:
         
         
         self.embedder = embedder
@@ -200,12 +207,39 @@ class llamaRag(basevectorDBLlamaIndex):
         
     def getVector(self):
         return self.vectorstore 
-        
+       
+
+            
     def query(self,query: str) -> str:
         if self.query_engine is None:
-            self.query_engine= self.vectorstore.as_query_engine()#(similarity_top_k=2)
+            # llm= OpenAI(temperature=0,model="gpt-4-turbo-preview",max_tokens=4000)
+            self.query_engine= self.vectorstore.as_query_engine(
+                response_mode="refine",
+                verbose=True,
+            )
+            
+            # self.query_engine= self.vectorstore.as_query_engine(response_mode="no_text")#(similarity_top_k=2)
         
         return self.query_engine.query(query)
+            
+        # response= self.query_engine.query(query)
+        # docs = []
+        
+        # for source_node in response.source_nodes:
+            
+        #     # metadata = source_node.extra_info or {}
+        #     docs.append(
+        #         # Document(page_content=source_node.source_text, metadata=metadata)
+        #         langchain_core.documents.Document(
+        #             page_content=source_node.node.text,
+        #             metadata={
+        #                 "source": source_node.node.relationships[
+        #                     NodeRelationship.SOURCE
+        #                 ].node_id
+        #             },
+        #         )
+        #     )
+        # return docs
     
       
 
@@ -256,8 +290,18 @@ class llamaRag(basevectorDBLlamaIndex):
         #     # Check if the node has metadata and if it includes entities
         #     print("doc_info:",doc_i)
            
+    #-------------------------tools session ----------------------------------
+    
+    def getRetriverToolFactory(self):
+        return self.getLangChainRetriver()
+    
+    def getLangchainToolDefinition(self ,name,description,retriver_tool_factory=None):
+        return langchain.tools.Tool(
+                    name = name,
+                    func=lambda q: str(self.query(q)),
+                    description=description
+                )
         
-  
     
 def check_embeding(ll,query):
     # ll.load()
@@ -268,13 +312,23 @@ def check_embeding(ll,query):
         get_display(str(ll.data_search(query))))
         # get_display(str(ll.query(query))))
         # get_display(str(ll.data_search_llama(query))))
+        
+def check_embeding_query(ll,query):
+    # ll.load()
+    from bidi.algorithm import get_display
+
+
+    print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
+        # get_display(str(ll.data_search(query))))
+        get_display(str(ll.query(query))))
+        # get_display(str(ll.data_search_llama(query))))
        
 def buildDocumentsfromFaq(faq):
     documents=[]
     ids=baseVebtorDb.getUUID_ID(len(faq))
     for item,index in zip(faq,ids): 
         # index=baseVebtorDb.getUUID_ID()[0]
-        document_tmp =llamaRag.createDocument(index=index,title=item['question'],text= " question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n")
+        document_tmp =basevectorDBLlamaIndex.createDocument(index=index,title=item['question'],text= " question : "+ str( item['question']) +" \n answer : "+ str(item['answer'])+ "\n")
         documents.append(document_tmp)     
     return documents
 
@@ -297,13 +351,13 @@ def loadLlamaDB(faqs,myembeder):
 #     return ll
 
 
-def loadlamaDBfromExcel(llamaRag):
+def loadlamaDBfromExcel(llamaWrap):
     json_data =  getExcelDatainJson()
     print("load additional questions to llama index")
     documents=buildDocumentsfromFaq(json_data) 
-    llamaRag.add_data(documents)    
+    llamaWrap.add_data(documents)    
     # llamaRag.printDb()
-    return llamaRag  
+    return llamaWrap  
 
 def getVectorDB(embeding):
     ll=llamaRag(embedder=embeding)
@@ -314,20 +368,38 @@ def getVectorDB(embeding):
 if __name__ == "__main__":         
 
 
-    myembeder=Embeddings.getdefaultEmbading()
+    myembeder=Embeddings().getdefaultEmbading()
 
     # loadLlamaDB(document.faqs,myembeder)
 
     # ll=loadDatafromExcel(llamaRag(embedder=myembeder))
     
-    ll=llamaRag(embedder=myembeder)
-    query = "האם אפשר לשלם חשבון בביט"
-    check_embeding(ll,query)
+    # ll=llamaRag(embedder=myembeder)
+    ll=getVectorDB(myembeder)
+    
+    query = 'איך אני מגיע לירח'
+    # check_embeding(ll,query)
+    
+    print("----------------------------query---------------------")
+    check_embeding_query(ll,query)
+    
+    exit(0)
+    
+    
+    # query = "האם אפשר לשלם חשבון בביט"
+    # check_embeding(ll=ll,query=query)
+    # check_embeding_query(ll,query)
+    
+    # query = "האם אפשר לשלם חשבון בביט"
+    # check_embeding(ll,query)
+    # check_embeding_query(ll,query)
 
     query = "איך אני מקבל תמיכה?"
 
-    check_embeding(ll,query)
+    # check_embeding(ll,query)
+    check_embeding_query(ll,query)
     
-    query = "מיהכן אוספים מטח?"
+    # query = "מיהכן אוספים מטח?"
 
-    check_embeding(ll,query)
+    # check_embeding(ll,query)
+    # check_embeding_query(ll,query)

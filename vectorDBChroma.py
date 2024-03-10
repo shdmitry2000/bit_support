@@ -8,14 +8,14 @@ from langchain_openai import OpenAIEmbeddings
 import numpy as np
 from excelutility import getExcelDatainJson
 
-from vectorDbbase import Embeddings,baseVebtorDb,basevectorDBLangchain
+from vectorDbbase import Embeddings,baseVebtorDb,basevectorDBLangchain ,baseToolsCreater
 
     
-class chromaRag(basevectorDBLangchain):
+class chromaRag(basevectorDBLangchain,baseToolsCreater):
     
     PERCISTENT_DIRECTORY="./indexes/croma/"
     
-    def __init__(self, persist_dir=PERCISTENT_DIRECTORY,embedder=Embeddings.getdefaultEmbading()) -> None:
+    def __init__(self, persist_dir=PERCISTENT_DIRECTORY,embedder=Embeddings().getdefaultEmbading()) -> None:
         super().__init__( persist_dir=persist_dir,embedder=embedder)  
        
 
@@ -87,7 +87,12 @@ class chromaRag(basevectorDBLangchain):
 
         print(all_items)
 
-
+    #-------------------------tools session ----------------------------------
+    
+    def getRetriverToolFactory(self):
+        return self.getLangChainRetriver()
+    
+        
 def check_embeding(ll,query):
     # ll.load()
     from bidi.algorithm import get_display
@@ -95,7 +100,17 @@ def check_embeding(ll,query):
 
     print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
         get_display(str(ll.data_search(query))))
-    
+def check_embeding_query(ll,query):
+    # ll.load()
+    from bidi.algorithm import get_display
+
+
+    print(ll.__class__.__name__,"answer for:\n",get_display(str(query)),"\n",
+        # get_display(str(ll.data_search(query))))
+        get_display(str(ll.query(query))))
+        # get_display(str(ll.data_search_llama(query))))
+       
+       
 def loadDocumentsfromFaq(faqs):
     import document
     documents=[]
@@ -131,15 +146,32 @@ def getVectorDB(embeding):
     
 if __name__ == "__main__":         
 
-    myembeder=Embeddings.getdefaultEmbading()
+    myembeder=Embeddings().getdefaultEmbading()
 
     # loadChromaDB(document.faqs,myembeder)
-    ll=chromaRag(embedder=myembeder)
+    ll=getVectorDB(myembeder)
+
+    query = 'איך אני מגיע לירח'
+    check_embeding(ll,query)
+    check_embeding_query(ll,query)
+    
+    # exit(0)
+    
+    
+    query = "האם אפשר לשלם חשבון בביט"
+    check_embeding(ll=ll,query=query)
+    check_embeding_query(ll,query)
+    
+    query = "האם אפשר לשלם חשבון בביט"
+    check_embeding(ll,query)
+    check_embeding_query(ll,query)
 
     query = "איך אני מקבל תמיכה?"
 
     check_embeding(ll,query)
+    check_embeding_query(ll,query)
     
     query = "מיהכן אוספים מטח?"
 
     check_embeding(ll,query)
+    check_embeding_query(ll,query)

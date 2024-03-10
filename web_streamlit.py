@@ -2,7 +2,8 @@
 
 import yfinance as yf
 import streamlit as st
-from bit_agent_interface_history import Conversational
+from bit_chatgpt_agent_interface_history import Conversational
+# from bit_claude_agent_interface_history import Conversational
 
 conversational=Conversational()
 def run_graph(query):

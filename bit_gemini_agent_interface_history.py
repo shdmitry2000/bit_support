@@ -1,3 +1,4 @@
+import sys
 import streamlit as st
 
 
@@ -10,11 +11,12 @@ from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, END
 from langchain.tools import tool
-from langchain_openai import ChatOpenAI
+
+from langchain_google_genai import GoogleGenerativeAI
 from typing import Annotated, Any, Dict, List, Optional, Sequence, TypedDict, Union
 import StockTool
 from vectorDbbase import baseVebtorDb
-from vector_db_tools import *
+# from vector_db_tools import *
 from vector_dbs import *
 import pandas as pd
 from utility import syncdecorator
@@ -23,7 +25,7 @@ from langchain_core.runnables.config import (
 )
 
 from excelutility import load_data
-
+import logging
 
 
 # vectors.add_data()
@@ -32,8 +34,8 @@ from excelutility import load_data
     
 class Conversational:
     
-    vectors=None
-    myembeder=Embeddings.getdefaultEmbading()
+    # vectors=None
+    # myembeder=Embeddings.getdefaultEmbading()
     
 
     # @syncdecorator
@@ -42,18 +44,23 @@ class Conversational:
     def getVector(self):
     
 
-        return VectorDatabaseDAO(self.myembeder).getVector()
+        return self.vectors
         
 
 
-    def __init__(self) -> None:
+    def __init__(self,vector_db_factory=vectorDBLlama,myembeder=Embeddings.getdefaultEmbading()) -> None:
        
             # Initialize model
-        llm = ChatOpenAI(model="gpt-4-turbo-preview",temperature=0.7)
+        # llm = ChatOpenAI(model="gpt-4-turbo-preview",temperature=0.7)
+        # llm = ChatAnthropic(model='claude-3-sonnet-20240229')
+        llm = GoogleGenerativeAI(model="models/text-bison-001")
 
         logging.basicConfig(stream=sys.stdout, level=logging.INFO)
         logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
-
+        
+        self.myembeder=myembeder
+        self.vector_db_factory=vector_db_factory
+        self.vectors=VectorDatabaseDAO(vector_db_factory=self.vector_db_factory,embeder= self.myembeder).getVector()
 
 
         # # 1. Define custom tools
@@ -63,9 +70,7 @@ class Conversational:
 
         # lla=vector_dbs.llamaRag(embedder=vector_dbs.Embeddings.getdefaultEmbading())
         # lla.load()
-        retriver=self.getVector().getLangChainRetriver()
-        la=RagTools(retriver=retriver)
-        tool_bit_searcher =la.getLangchainToolDefinition(name=bit_tool_name,description=bit_tool_description)
+        tool_bit_searcher=self.getVector().getLangchainToolDefinition(name=bit_tool_name,description=bit_tool_description)
         toolsBit= [ tool_bit_searcher ]
         #----------stock tools ------------------------------------
         tool_stock_findef=StockTool.StockTool().getToolDefinition()

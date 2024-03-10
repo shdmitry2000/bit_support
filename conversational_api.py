@@ -11,7 +11,7 @@ from fastapi_sessions.session_verifier import SessionVerifier
 from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
 
 from typing import Dict, List, Union
-import bit_agent_interface_history
+from  bit_chatgpt_agent_interface_history import Conversational
 
 import pandas as pd
 from excelutility import load_data,EXCEL_FILE
@@ -114,7 +114,7 @@ async def create_session(name: str, response: Response):
 
 
     # Store the object in a server-side dictionary or cache using the handle as the key
-    server_storage[session] = bit_agent_interface_history.Conversational()
+    server_storage[session] = Conversational()
 
     # data = SessionData(username=name)
     data = SessionData(username=name)
@@ -223,7 +223,7 @@ async def delete_question(question: str):
 async def symantec_search_api(input_string: str):
     try:
         # Generate documents based on the input string
-        conversational=bit_agent_interface_history.Conversational()
+        conversational=Conversational()
         return conversational.symantec_search(input_string)
         
     except Exception as e:
@@ -235,7 +235,7 @@ async def symantec_search_api(input_string: str):
 async def query_symantic_search_with_score(input_string: str):
     try:
         # Generate documents based on the input string
-        conversational=bit_agent_interface_history.Conversational()
+        conversational=Conversational()
         return conversational.query_symantec_search_with_score(input_string)
         
     except Exception as e:

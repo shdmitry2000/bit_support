@@ -1,6 +1,6 @@
 import logging
 
-from bit_agent_interface_history import Conversational
+from bit_chatgpt_agent_interface_history import Conversational
 # Configure the logger
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

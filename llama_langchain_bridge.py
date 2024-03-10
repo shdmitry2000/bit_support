@@ -25,7 +25,7 @@ class LlamaIndexRetriever(BaseRetriever):
     """Keyword arguments to pass to the query method."""
 
     embedding: Any
-    def _get_relevant_documents_ret(
+    def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
         """Get documents relevant for a query."""
@@ -77,9 +77,9 @@ class LlamaIndexRetriever(BaseRetriever):
 
 
 
-    def _get_relevant_documents(
+    def _get_relevant_documents_woresponce(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
-    ) -> List[Document]:
+    ) -> List[Document]: 
         """Get documents relevant for a query."""
         try:
             from llama_index.core.schema import NodeRelationship
@@ -104,8 +104,55 @@ class LlamaIndexRetriever(BaseRetriever):
         )
         response = query_engine.query(query)
         
-        # print(response)
         response = cast(Response, response)
+        
+        # parse source nodes
+        docs = []
+        
+        for source_node in response.source_nodes:
+            # metadata = source_node.extra_info or {}
+            docs.append(
+                # Document(page_content=source_node.source_text, metadata=metadata)
+                Document(
+                    page_content=source_node.node.text,
+                    metadata={
+                        "source": source_node.node.relationships[
+                            NodeRelationship.SOURCE
+                        ].node_id
+                    },
+                )
+            )
+        return docs
+    
+    def _get_relevant_documents_wresponse(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> List[Document]: 
+        """Get documents relevant for a query."""
+        try:
+            from llama_index.core.schema import NodeRelationship
+            from llama_index.core.schema import NodeWithScore
+            from llama_index.core import Response
+            from llama_index.core import VectorStoreIndex, get_response_synthesizer
+            from llama_index.core.retrievers import VectorIndexRetriever
+            from llama_index.core.query_engine import RetrieverQueryEngine
+            from llama_index.core.postprocessor import SimilarityPostprocessor
+            from llama_index.core.schema import NodeWithScore
+            from llama_index.core import VectorStoreIndex, SimpleDirectoryReader,SimpleKeywordTableIndex
+
+        except ImportError:
+            raise ImportError(
+                "You need to install `pip install llama-index` to use this retriever."
+            )
+        index = cast(VectorStoreIndex, self.index)
+        # print("self.index",self.index)
+        # embedding = cast(LangchainEmbedding,self.embedding)
+        query_engine = self.index.as_query_engine(
+             **self.query_kwargs
+        )
+        response = query_engine.query(query)
+        
+        response = cast(Response, response)
+        
         # parse source nodes
         docs = []
         
