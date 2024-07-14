@@ -5,6 +5,7 @@ my-app
 images
 
 *.zip
+*bk
 
 __pycache__
 encoder_cache
