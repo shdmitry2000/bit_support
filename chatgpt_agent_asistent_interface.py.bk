@@ -1,0 +1,246 @@
+import asyncio
+import importlib
+import pprint
+import sys,os,json
+
+
+# from bs4 import BeautifulSoup
+# from duckduckgo_search import DDGS
+from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_core.messages import BaseMessage, HumanMessage
+from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langgraph.graph import StateGraph, END
+from langchain.tools import tool
+from langchain_openai import ChatOpenAI
+from typing import Annotated, Any, Dict, List, Optional, Sequence, TypedDict, Union
+import StockTool
+# from vector_db_tools import *
+from vectorRag import *
+# import pandas as pd
+from utility import syncdecorator
+from langchain_core.runnables.config import (
+    RunnableConfig,
+)
+
+from excelutility import load_data
+import logging
+from typing import Annotated, Sequence, TypedDict
+
+from langchain_core.messages import BaseMessage
+import json
+import operator
+from typing import Annotated, Sequence, TypedDict
+
+from langchain import hub
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import PromptTemplate
+# from langchain.tools.render import format_tool_to_openai_function
+from langchain_core.utils.function_calling import format_tool_to_openai_function
+from langchain_core.utils.function_calling import convert_to_openai_tool
+from langchain_core.messages import BaseMessage, FunctionMessage
+from langchain.output_parsers.openai_tools import PydanticToolsParser
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import ToolInvocation
+from langchain_core.output_parsers import StrOutputParser
+
+from vectordb import vectorDBLlama
+
+
+# vectors.add_data()
+# {'question': "My name's bob. How are you?", 'chat_history': [HumanMessage(content="My name's bob. How are you?", additional_kwargs={}, example=False), AIMessage(content="I'm doing well, thank you. How can I assist you today, Bob?", additional_kwargs={}, example=False)], 'answer': "I'm doing well, thank you. How can I assist you today, Bob?"}
+
+class GeminiTools():
+    llmQA =  GoogleGenerativeAI(model="models/text-bison-001",temperature=0 #,
+        # safety_settings={
+        #     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        # },
+    # convert_system_message_to_human=True
+    )
+
+    
+    def __init__(self,fail_prompt) -> None:
+        self.fail_prompt=fail_prompt
+        corpus =  getExcelDatainJson()
+        self.corpus_str = "\n".join([f"Question: {item['question']}\nAnswer: {item['answer']}" for item in corpus])
+
+        # self.llmQA.add_instruction(corpus_str)
+    
+    def getLlm(self):
+        return self.llmQA
+       
+class ClaudeTools():
+    llmQA = ChatAnthropic(model='claude-3-sonnet-20240229', temperature=0)
+    
+    def __init__(self,fail_prompt) -> None:
+        self.fail_prompt=fail_prompt
+        corpus =  getExcelDatainJson()
+        self.corpus_str = "\n".join([f"Question: {item['question']}\nAnswer: {item['answer']}" for item in corpus])
+
+        # self.llmQA.add_instruction(corpus_str)
+    
+    def getLlm(self):
+        return self.llmQA
+        
+    def question_answering_tool(self,input_str):
+        result = self.llmQA([{"role": "user", "content": f"Question: {input_str}"}, {"role": "instruction", "content": self.corpus_str}])
+   
+        # result = self.llmQA(f"Question: {input_str}")
+        if result.strip():
+            return result.strip()
+        else:
+            return self.fail_prompt
+        
+        
+class Conversational:
+    
+
+
+    
+
+    def __init__(self,vectorDatabaseRAG=None ,log=True) -> None:
+        
+        if log :
+            logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+            logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+             
+        if vectorDatabaseRAG is None:
+            vectorDatabaseRAG=VectorDatabaseRAG()
+            
+        self.vectorDatabaseRAG=vectorDatabaseRAG
+        self.buildagent()
+        
+    
+    def bit_search_tools(question: str) -> List[str]:
+        """
+        Call this tool when user wants founding answers for questions about bit application.
+
+        Args:
+            question (str): Value with same name from metadata.
+
+        Returns:
+            List[str]: documents founded about question.
+        """
+        print("== ebit_search_tools ==> tool called")
+        
+        # Ensure vectorDatabaseRAG is initialized and accessible
+        if vectorDatabaseRAG is None:
+            raise ValueError("vectorDatabaseRAG is not initialized.")
+        
+        try:
+            docs = vectorDatabaseRAG.data_search(question)
+        except Exception as e:
+            print(f"Error searching vector database: {e}")
+            docs = []
+        
+        print('docs', docs)
+        
+        documents = [t.page_content for t in docs if t.page_content is not None]
+        
+        print('documents', documents)
+        
+        return json.dumps(documents)
+        # return documents
+
+    def bit_query_tools(question: str) -> List[str]:
+        
+        """
+        Call this tool when user wants founding answers for  questions about bit application.
+
+        Args:
+            question (str): Value with same name from metadata.
+
+        Returns:
+            List[str]: documents founded about question.
+        """
+    
+        print("== bit_query_tools ==> tool called")
+        docs=vectorDatabaseRAG.query(question)
+        print('docs',docs)
+        documents = [t.page_content for t in docs if t.page_content is not None]
+        
+        print('documents', documents)
+        
+        return json.dumps(documents)
+        # return documents
+            
+            
+            
+            
+        def buildagent(self):
+        
+            
+            
+        def symantec_search(self,search_str:str):
+            return self.vectorDatabaseRAG.data_search(search_str)
+        
+        def query_symantec_search_with_score(self,search_str:str):
+            return self.vectorDatabaseRAG.query(search_str)
+        
+        async def run_graph(self,input_message:str):
+            print("input_message",input_message)
+            # history_trank=history
+            try:
+                response =await self.graph.ainvoke({
+                    "question": input_message
+                })
+                # return json.dumps(response['messages'][1].content, indent=2)
+                print("response",response)
+                try:
+                    return response['generation']
+                except IndexError:
+                    return "לא נמצא תשובה!"
+            except Exception as e:
+                print(f"An exception occurred: {e}")
+                raise e
+                # return (f"An exception occurred: {e}")
+            
+            
+
+
+
+    async def ainvoke(
+        self,
+        input: Union[dict[str, Any], Any],
+        config: Optional[RunnableConfig] = None,
+        *,
+        output_keys: Optional[Union[str, Sequence[str]]] = None,
+        input_keys: Optional[Union[str, Sequence[str]]] = None,
+        **kwargs: Any):
+        
+        if isinstance(input,str):
+            response =await self.run_graph(input)
+        else:
+            response = await self.graph.ainvoke(input)
+        return response
+            
+    
+
+    async def __call__(self, context):
+        # Extract the 'question' from the context dictionary
+        question = context['question']
+        return f"{ await self.run_graph(question)}"
+
+
+   
+          
+async def test_function():
+    # conversational = Conversational(VectorDatabaseRAG())
+    conversational = Conversational(VectorDatabaseRAG(vector_db_factory= vectorDBLlama))
+    task = asyncio.create_task(conversational.run_graph("איך אני מקבל תמיכה?"))
+    # Do other work here while the coroutine runs
+    result = await task # Optionally await the result
+    from bidi.algorithm import get_display
+
+    print(get_display(result))
+
+def main():
+    # Run the async function
+    asyncio.run(test_function())   
+    
+if __name__ == "__main__":
+    main()
+        
+    
+

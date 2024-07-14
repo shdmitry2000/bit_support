@@ -1,0 +1,620 @@
+import asyncio
+import importlib
+import pprint
+import sys,os,json
+
+
+# from bs4 import BeautifulSoup
+# from duckduckgo_search import DDGS
+from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_core.messages import BaseMessage, HumanMessage
+from langchain.output_parsers.openai_functions import JsonOutputFunctionsParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langgraph.graph import StateGraph, END
+from langchain.tools import tool
+from langchain_openai import ChatOpenAI
+from typing import Annotated, Any, Dict, List, Optional, Sequence, TypedDict, Union
+import StockTool
+# from vector_db_tools import *
+from vectorRag import *
+# import pandas as pd
+from utility import syncdecorator
+from langchain_core.runnables.config import (
+    RunnableConfig,
+)
+
+from excelutility import load_data
+import logging
+from typing import Annotated, Sequence, TypedDict
+
+from langchain_core.messages import BaseMessage
+import json
+import operator
+from typing import Annotated, Sequence, TypedDict
+
+from langchain import hub
+from langchain.output_parsers import PydanticOutputParser
+from langchain.prompts import PromptTemplate
+# from langchain.tools.render import format_tool_to_openai_function
+from langchain_core.utils.function_calling import format_tool_to_openai_function
+from langchain_core.utils.function_calling import convert_to_openai_tool
+from langchain_core.messages import BaseMessage, FunctionMessage
+from langchain.output_parsers.openai_tools import PydanticToolsParser
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import ToolInvocation
+from langchain_core.output_parsers import StrOutputParser
+
+from vectordb import vectorDBLlama
+
+
+# vectors.add_data()
+# {'question': "My name's bob. How are you?", 'chat_history': [HumanMessage(content="My name's bob. How are you?", additional_kwargs={}, example=False), AIMessage(content="I'm doing well, thank you. How can I assist you today, Bob?", additional_kwargs={}, example=False)], 'answer': "I'm doing well, thank you. How can I assist you today, Bob?"}
+
+class GeminiTools():
+    llmQA =  GoogleGenerativeAI(model="models/text-bison-001",temperature=0 #,
+        # safety_settings={
+        #     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        # },
+    # convert_system_message_to_human=True
+    )
+
+    
+    def __init__(self,fail_prompt) -> None:
+        self.fail_prompt=fail_prompt
+        corpus =  getExcelDatainJson()
+        self.corpus_str = "\n".join([f"Question: {item['question']}\nAnswer: {item['answer']}" for item in corpus])
+
+        # self.llmQA.add_instruction(corpus_str)
+    
+    def getLlm(self):
+        return self.llmQA
+       
+class ClaudeTools():
+    llmQA = ChatAnthropic(model='claude-3-sonnet-20240229', temperature=0)
+    
+    def __init__(self,fail_prompt) -> None:
+        self.fail_prompt=fail_prompt
+        corpus =  getExcelDatainJson()
+        self.corpus_str = "\n".join([f"Question: {item['question']}\nAnswer: {item['answer']}" for item in corpus])
+
+        # self.llmQA.add_instruction(corpus_str)
+    
+    def getLlm(self):
+        return self.llmQA
+        
+    def question_answering_tool(self,input_str):
+        result = self.llmQA([{"role": "user", "content": f"Question: {input_str}"}, {"role": "instruction", "content": self.corpus_str}])
+   
+        # result = self.llmQA(f"Question: {input_str}")
+        if result.strip():
+            return result.strip()
+        else:
+            return self.fail_prompt
+        
+        
+class Conversational:
+    
+    model = ChatOpenAI(model="gpt-4o",temperature=0)
+
+    
+
+    def __init__(self,vectorDatabaseRAG=None ,log=True) -> None:
+        
+        if log :
+            logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+            logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+             
+        if vectorDatabaseRAG is None:
+            vectorDatabaseRAG=VectorDatabaseRAG()
+            
+        self.vectorDatabaseRAG=vectorDatabaseRAG
+        self.buildgraph()
+        
+    
+    def buildgraph(self):
+    
+        
+        class GraphState(TypedDict):
+            """
+            Represents the state of our graph.
+
+            Attributes:
+                question: question
+                generation: LLM generation
+                documents: list of documents 
+            """
+            question : str
+            generation : str
+            documents : List[str]
+            rewrited : int = 0
+            
+        class GradeDocuments(BaseModel):
+            """Binary score for relevance check on retrieved documents."""
+
+            binary_score: str = Field(description="Documents are relevant to the question, 'yes' or 'no'")
+
+        # Data model
+        class GradeHallucinations(BaseModel):
+            """Binary score for hallucination present in generation answer."""
+
+            binary_score: str = Field(description="Answer is grounded in the facts, 'yes' or 'no'")
+
+        # Data model
+        class GradeAnswer(BaseModel):
+            """Binary score to assess answer addresses question."""
+
+            binary_score: str = Field(description="Answer addresses the question, 'yes' or 'no'")
+
+        async def generateSPR(block:str):
+            """
+            compress any arbitrary block of text into an SPR.
+
+            Args:
+                block (str):arbitrary block of text
+
+            Returns:
+                block (str): Sparse Priming Representations (SPR) 
+                # https://github.com/daveshap/SparsePrimingRepresentations/tree/main
+            """
+            print("---------generateSPR-------------")
+            
+            spr_denerate_prompt=
+            """
+            # MISSION
+            You are a Sparse Priming Representation (SPR) writer. An SPR is a particular kind of use of language for advanced NLP, NLU, and NLG tasks, particularly useful for the latest generation of Large Language Models (LLMs). You will be given information by the USER which you are to render as an SPR.
+
+            # THEORY
+            LLMs are a kind of deep neural network. They have been demonstrated to embed knowledge, abilities, and concepts, ranging from reasoning to planning, and even to theory of mind. These are called latent abilities and latent content, collectively referred to as latent space. The latent space of an LLM can be activated with the correct series of words as inputs, which will create a useful internal state of the neural network. This is not unlike how the right shorthand cues can prime a human mind to think in a certain way. Like human minds, LLMs are associative, meaning you only need to use the correct associations to "prime" another model to think in the same way.
+
+            # METHODOLOGY
+            Render the input as a distilled list of succinct statements, assertions, associations, concepts, analogies, and metaphors. The idea is to capture as much, conceptually, as possible but with as few words as possible. Write it in a way that makes sense to you, as the future audience will be another language model, not a human. Use complete sentences.
+
+            """
+
+        
+        async def retrieve(state):
+            """
+            Retrieve documents
+
+            Args:
+                state (dict): The current graph state
+
+            Returns:
+                state (dict): New key added to state, documents, that contains retrieved documents
+            """
+            print("---------RETRIEVE-------------")
+            question = state["question"]
+
+            # Retrieval
+            # documents = retriever.get_relevant_documents(question)
+            
+            docs=self.vectorDatabaseRAG.data_search(question)
+            # docs2=self.vectorDatabaseRAG.query(question)
+            print('docs',docs)
+            # print('docs',docs2)
+            documents=[t.page_content for t in docs]
+            return {"documents": documents, "question": question}
+
+        async def retrieveWEngine(state):
+            """
+            Retrieve documents
+
+            Args:
+                state (dict): The current graph state
+
+            Returns:
+                state (dict): New key added to state, documents, that contains retrieved documents
+            """
+            print("---RETRIEVE by engine---")
+            question = state["question"]
+
+            docs=self.vectorDatabaseRAG.query(question)
+            print('docs',docs)
+            documents=[docs]
+            return {"documents": documents, "question": question}
+
+
+        async def generate(state):
+            """
+            Generate answer
+
+            Args:
+                state (dict): The current graph state
+
+            Returns:
+                state (dict): New key added to state, generation, that contains LLM generation
+            """
+            print("--------GENERATE---------")
+            question = state["question"]
+            documents = state["documents"]
+            
+            # Prompt
+            # prompt = hub.pull("rlm/rag-prompt")
+            # print("prompt",prompt)
+            system = """
+                    You are a customer support agent for a payment application.
+                    Answer in a friendly and concise manner.
+                    Answer in the same language of the given question
+                    If you don't have any relevant answer, use this default answer:
+לא נמצאה תשובה לשאלתך, ניתן לפנות למוקד שירות הלקוחות של ביט בטלפון 6428*
+בימים א'-ה' - 9:00-17:00 | ו' וערבי חג - 8:30-13:00
+                    \nContext:
+                    {context}
+                    \nAnswer:
+                     """
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system),
+                    ("human", "Here is the initial question: \n {question} ."),
+                ]
+            )
+            # # LLM
+            # llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0)
+
+            # # Post-processing
+            # def format_docs(docs):
+            #     return "\n\n".join(doc.page_content for doc in docs)
+
+            # Chain
+            rag_chain = prompt | self.model | StrOutputParser()
+
+            # RAG generation
+            generation =await rag_chain.ainvoke({"context": documents, "question": question})
+            return {"documents": documents, "question": question, "generation": generation}
+
+        async def grade_documents(state):
+            """
+            Determines whether the retrieved documents are relevant to the question.
+
+            Args:
+                state (dict): The current graph state
+
+            Returns:
+                state (dict): Updates documents key with only filtered relevant documents
+            """
+
+            print("---CHECK DOCUMENT RELEVANCE TO QUESTION---")
+            question = state["question"]
+            documents = state["documents"]
+            
+           
+            # # LLM with function call 
+            # llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0)
+            structured_llm_grader = self.model.with_structured_output(GradeDocuments)
+            # Prompt 
+            system = """You are a grader assessing relevance of a retrieved document to a user question. \n 
+                It does not need to be a stringent test. The goal is to filter out erroneous retrievals. \n
+                If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
+                Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."""
+            grade_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system),
+                    ("human", "Retrieved document: \n\n {document} \n\n User question: {question}"),
+                ]
+            )
+
+            retrieval_grader = grade_prompt | structured_llm_grader
+
+            # Score each doc
+            filtered_docs = []
+            for d in documents:
+                print("__document__",d)
+                score =await retrieval_grader.ainvoke({"question": question, "document": d})
+                grade = score.binary_score
+                if grade == "yes":
+                    print("---GRADE: DOCUMENT RELEVANT---")
+                    filtered_docs.append(d)
+                else:
+                    print("---GRADE: DOCUMENT NOT RELEVANT---")
+                    continue
+            return {"documents": filtered_docs, "question": question}
+
+
+
+        async def transform_query(state):
+            """
+            Transform the query to produce a better question.
+
+            Args:
+                state (dict): The current graph state
+
+            Returns:
+                state (dict): Updates question key with a re-phrased question
+            """
+
+            print("-------TRANSFORM QUERY--------")
+            question = state["question"]
+            documents = state["documents"]
+            try:
+                rewrited = state["rewrited"]
+            
+                if rewrited >1 :
+                    raise RuntimeError("Only once we can rewrite Query!!!Second attempt.")
+            except:
+                rewrited=0
+                
+
+            # Prompt 
+            system = """You a question re-writer that converts an input question to a better version that is optimized \n 
+                for vectorstore retrieval. Look at the input and try to reason about the underlying sematic intent / meaning."""
+            re_write_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system),
+                    ("human", "Here is the initial question: \n\n {question} \n Formulate an improved question."),
+                ]
+            )
+
+            question_rewriter = re_write_prompt | self.model | StrOutputParser()
+
+            # Re-write question
+            better_question =await  question_rewriter.ainvoke({"question": question})
+            return {"documents": documents, "question": better_question , "rewrited":rewrited+1 }
+
+        def decide_to_generate(state):
+            """
+            Determines whether to generate an answer, or re-generate a question.
+
+            Args:
+                state (dict): The current graph state
+
+            Returns:
+                str: Binary decision for next node to call
+            """
+
+            print("-------ASSESS GRADED DOCUMENTS---------")
+            question = state["question"]
+            filtered_documents = state["documents"]
+            try:
+                rewrite = state["rewrited"]
+            except :
+                rewrite=0
+                 
+            
+            print('rewrite',rewrite)
+            if not filtered_documents:
+                # All documents have been filtered check_relevance
+                # We will re-generate a new query
+                print("---DECISION: ALL DOCUMENTS ARE NOT RELEVANT TO QUESTION, TRANSFORM QUERY---")
+                if rewrite==0:
+                    return "transform_query"
+                else:
+                    print("---DECISION: QUERY OLREADYTRANSFORM  ---")
+                    return "not supported"
+            else:
+                # We have relevant documents, so generate answer
+                print("---DECISION: GENERATE---")
+                return "generate"
+            
+
+
+        async def grade_generation_v_documents_and_question(state):
+            """
+            Determines whether the generation is grounded in the document and answers question.
+
+            Args:
+                state (dict): The current graph state
+
+            Returns:
+                str: Decision for next node to call
+            """
+
+            print("------CHECK HALLUCINATIONS------")
+            question = state["question"]
+            documents = state["documents"]
+            generation = state["generation"]
+            # try:
+            #     rewrite = state["rewrited"]
+            # except:
+            #     rewrite=0 
+
+            structured_llm_grader = self.model.with_structured_output(GradeHallucinations)
+
+            # Prompt 
+            system = """You are a grader assessing whether an LLM generation is grounded in / supported by a set of retrieved facts. \n 
+                Give a binary score 'yes' or 'no'. 'Yes' means that the answer is grounded in / supported by the set of facts."""
+            hallucination_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system),
+                    ("human", "Set of facts: \n\n {documents} \n\n LLM generation: {generation}"),
+                ]
+            )
+
+            hallucination_grader = hallucination_prompt | structured_llm_grader
+
+
+            score =await  hallucination_grader.ainvoke({"documents": documents, "generation": generation})
+            grade = score.binary_score
+            
+            # Prompt 
+            system = """You are a grader assessing whether an answer addresses / resolves a question \n 
+                Give a binary score 'yes' or 'no'. Yes' means that the answer resolves the question."""
+            answer_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", system),
+                    ("human", "User question: \n\n {question} \n\n LLM generation: {generation}"),
+                ]
+            )
+
+            answer_grader = answer_prompt | structured_llm_grader
+
+            # Check hallucination
+            if grade == "yes":
+                print("---DECISION: GENERATION IS GROUNDED IN DOCUMENTS---")
+                # Check question-answering
+                print("---GRADE GENERATION vs QUESTION---")
+                score = answer_grader.invoke({"question": question,"generation": generation})
+                grade = score.binary_score
+                if grade == "yes":
+                    print("---DECISION: GENERATION ADDRESSES QUESTION---")
+                    return "useful"
+                else:
+                    print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---")
+                    return "not useful"
+            else:
+                print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY---")
+                return "not supported"
+            
+        async def  exitprint(state):
+            print("---exitprint---")
+            question = state["question"]
+            documents = state["documents"]
+            generation = state["generation"]
+            try:
+                rewrite = state["rewrited"]
+            except:
+                rewrite=0 
+
+            
+            return {"documents": documents, "question": question, "generation": generation , "rewrited": rewrite}
+
+                
+            
+    
+    
+        workflow = StateGraph(GraphState)
+
+        # Define the nodes
+        workflow.add_node("retrieve", retrieve) # retrieve
+        workflow.add_node("retrieveWEngine", retrieveWEngine) # retrieveWEngine
+        
+
+        workflow.add_node("grade_documents", grade_documents) # grade documents
+        workflow.add_node("generate", generate) # generatae
+        
+        # workflow.add_node("grade_documents_2", grade_documents) # grade documents
+        # workflow.add_node("transform_query", transform_query) # transform_query
+        # workflow.add_node("exitprint", exitprint) # exitprint
+
+
+        # ---------------------Build graph ---------------------
+        
+        workflow.set_entry_point("retrieve")
+        workflow.add_edge("retrieve", "grade_documents")
+        workflow.add_conditional_edges(
+            "grade_documents",
+            decide_to_generate,
+            {
+                "transform_query": "retrieveWEngine",
+                "generate": "generate",
+            },
+        )
+        workflow.add_edge("retrieveWEngine", "generate")
+        
+        # workflow.add_edge("retrieveWEngine", "grade_documents_2")
+       
+        # workflow.add_conditional_edges(
+        #     "grade_documents_2",
+        #     decide_to_generate,
+        #     {
+        #         "transform_query": "transform_query",
+        #         "generate": "generate",
+        #         "not supported": "exitprint",
+        #     },
+        # )
+        
+        # workflow.add_edge("transform_query", "retrieve")
+        # workflow.add_conditional_edges(
+        #     "generate",
+        #     grade_generation_v_documents_and_question,
+        #     {
+        #         "not supported": "exitprint",
+        #         "useful": END,
+        #         "not useful": "transform_query",
+        #     },
+        # )
+        
+        # workflow.add_edge("exitprint", END)
+        workflow.add_edge("generate", END)
+        
+        
+        
+        
+        # workflow.add_conditional_edges(
+        #     "grade_documents",
+        #     decide_to_generate,
+        #     {
+        #         "transform_query": "transform_query",
+        #         "generate": "generate",
+        #     },
+        # )
+        # workflow.add_edge("transform_query", "retrieve")
+        
+        # Compile
+        self.graph = workflow.compile()
+        
+        print("graph build!!")
+            
+          
+    def symantec_search(self,search_str:str):
+        return self.vectorDatabaseRAG.data_search(search_str)
+    
+    def query_symantec_search_with_score(self,search_str:str):
+        return self.vectorDatabaseRAG.query(search_str)
+    
+    async def run_graph(self,input_message:str):
+        print("input_message",input_message)
+        # history_trank=history
+        try:
+            response =await self.graph.ainvoke({
+                "question": input_message
+            })
+            # return json.dumps(response['messages'][1].content, indent=2)
+            print("response",response)
+            try:
+                return response['generation']
+            except IndexError:
+                return "לא נמצא תשובה!"
+        except Exception as e:
+            print(f"An exception occurred: {e}")
+            raise e
+            # return (f"An exception occurred: {e}")
+           
+        
+
+
+
+    async def ainvoke(
+        self,
+        input: Union[dict[str, Any], Any],
+        config: Optional[RunnableConfig] = None,
+        *,
+        output_keys: Optional[Union[str, Sequence[str]]] = None,
+        input_keys: Optional[Union[str, Sequence[str]]] = None,
+        **kwargs: Any):
+        
+        if isinstance(input,str):
+            response =await self.run_graph(input)
+        else:
+            response = await self.graph.ainvoke(input)
+        return response
+            
+    
+
+    async def __call__(self, context):
+        # Extract the 'question' from the context dictionary
+        question = context['question']
+        return f"{ await self.run_graph(question)}"
+
+
+   
+          
+async def test_function():
+    # conversational = Conversational(VectorDatabaseRAG())
+    conversational = Conversational(VectorDatabaseRAG(vector_db_factory= vectorDBLlama))
+    task = asyncio.create_task(conversational.run_graph("איך אני מקבל תמיכה?"))
+    # Do other work here while the coroutine runs
+    result = await task # Optionally await the result
+    from bidi.algorithm import get_display
+
+    print(get_display(result))
+
+def main():
+    # Run the async function
+    asyncio.run(test_function())   
+    
+if __name__ == "__main__":
+    main()
+        
+    
+

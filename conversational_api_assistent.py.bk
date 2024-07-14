@@ -1,0 +1,337 @@
+
+# uvicorn conversational_api:app --reload
+import json
+import logging
+import pathlib
+import subprocess
+import os,sys
+# from dotenv import load_dotenv
+from pydantic import BaseModel
+from fastapi import HTTPException, FastAPI, Response, Depends
+# from uuid import UUID, uuid4
+
+# from chatgpt_agent_interface import Conversational
+from fastapi_sessions.backends.implementations import InMemoryBackend
+from fastapi_sessions.session_verifier import SessionVerifier
+from fastapi_sessions.frontends.implementations import SessionCookie, CookieParameters
+
+from typing import Dict, List, Union ,Optional
+# from  bit_chatgpt_agent_interface_history import Conversational
+
+import pandas as pd
+from bit_chatgpt_agent_conversational import Conversational
+from excelutility import load_data,EXCEL_FILE
+from utility import *
+import traceback
+
+
+from dotenv import load_dotenv, find_dotenv
+
+from vectorRag import VectorDatabaseRAG
+# from vectordb import vectorDBLlama
+from assistant.agent import Agent
+from assistant.existingassistentagent import ExistingAssistentAgent
+from vectordb import vectorDBLlama
+
+# import vectorDBChroma 
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+
+from asyncer import asyncify
+        
+load_dotenv(find_dotenv())
+# load_dotenv()
+
+
+INSTRUCTIONS="""
+אתה צאט בוט ידידותי ואנושי של אפליקצית ביט להעברת כספים, תענה בצורה הכי נחמדה ופשוטה באופן יעיל ומדויק על השאלות .
+  תענה רק בהסתמכות על המידע שסופק במאגר.
+  תמיד בשלב ראשון חפש נוסה במעגר.
+# כל השאילות מתיחסות לאפליקציה ביט בלבד של בנק הפועלים.
+#    גם אפשר לפרק שאילה לכמה ולבדוק כל אחד מכם אבל להקפיד על משמעות של שאילות.
+תקפיד על מספרי טלפון ושעות פעילות.
+ ענה בשפה שבה נשאלה השאלה, תוך תרגום אם יש צורך.
+אם לא נמצאה מידע, המשתמש יכול ליצור קשר עם התמיכה:
+טלפון: *6428 ימים א'-ה': 9:00-17:00 | ערבי חג וצומות: 8:30-13:00
+
+"""
+
+server_storage_current_assistent = {}
+server_storage_tools_assistent = {}
+
+ASSISTENT_ID=os.getenv("ASSISTENT_EXISTED_ID",default=None)
+VECTORSTORE_ID=os.getenv("ASSISTENT_VECTORSTORE_ID",default=None)
+
+MODEL_NAME=os.getenv("MODEL",default="gpt-4o")
+
+
+class Record(BaseModel):
+    question: str
+    answer: str
+
+    
+class History(BaseModel):
+    field1: str
+    field2: Union[str,List[str]] 
+
+class Conversation(BaseModel):
+    question: str
+    history: Union[str,List[str], List[History]] | None = None
+
+class RoundRobinScheduler:
+    def __init__(self,size,vectorDB=None):
+        self.conversationals = [Conversational(vectorDB) for _ in range(size)]
+        self.index = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index >= len(self.conversationals):
+            self.index = 0 # Reset the index to start from the beginning
+        obj = self.conversationals[self.index]
+        self.index += 1 # Move to the next object
+        return obj
+    
+    
+app = FastAPI()
+
+
+vectorDatabaseRAG=VectorDatabaseRAG(vector_db_factory= vectorDBLlama)
+# vectorDatabaseRAG=VectorDatabaseRAG()
+# conversational = Conversational(vectorDB)
+# conversational_scheduler = RoundRobinScheduler(1)
+
+
+# @app.post("/create_session/{name}")
+# async def create_session(name: str, response: Response):
+
+#     session:UUID = uuid4()
+#     # qa_object_handle=uuid4()
+
+#     return { "status":f"created session for {name}","session_id" : session}
+
+
+
+@app.get("/")
+async def help():
+    return {"200" ,"use /docs for swagger" }
+
+def bit_search_tools(question: str) -> List[str]:
+    """
+    Call this tool when user wants founding answers for questions about bit application.
+
+    Args:
+        question (str): Value with same name from metadata.
+
+    Returns:
+        List[str]: documents founded about question.
+    """
+    print("== ebit_search_tools ==> tool called")
+    
+    # Ensure vectorDatabaseRAG is initialized and accessible
+    if vectorDatabaseRAG is None:
+        raise ValueError("vectorDatabaseRAG is not initialized.")
+    
+    try:
+        docs = vectorDatabaseRAG.data_search(question)
+    except Exception as e:
+        print(f"Error searching vector database: {e}")
+        docs = []
+    
+    print('docs', docs)
+    
+    documents = [t.page_content for t in docs if t.page_content is not None]
+    
+    print('documents', documents)
+    
+    return json.dumps(documents)
+    # return documents
+
+def bit_query_tools(question: str) -> List[str]:
+    
+    """
+    Call this tool when user wants founding answers for  questions about bit application.
+
+    Args:
+        question (str): Value with same name from metadata.
+
+    Returns:
+        List[str]: documents founded about question.
+    """
+   
+    print("== bit_query_tools ==> tool called")
+    docs=vectorDatabaseRAG.query(question)
+    print('docs',docs)
+    # import llama_index.core.base.response.schema.Response
+    
+    # print(docs)
+    documents = [docs.response ]
+        
+    print('documents', documents)
+    
+    return json.dumps(documents)
+    # return documents
+        
+        
+    
+@app.post("/conversation/{session_id}")
+async def say(conversation:Conversation,session_id :str = None):
+    question=conversation.question
+    print("recive :",question )
+    logging.info(f" requst : %s for se",question )
+
+    if session_id in server_storage_tools_assistent:
+        # If it exists, update its value
+        agent =server_storage_tools_assistent[session_id]
+    else:
+         
+        
+        agent = Agent(session=session_id,
+             instructions= INSTRUCTIONS
+             ,
+            #  f"""
+            #     אתה צאט בוט ידידותי ואנושי של אפליקצית ביט להעברת כספים, תענה בצורה הכי נחמדה ופשוטה על השאלות בהסתמך רק המידע שסופק
+            # """ 
+            
+              tools={
+                bit_search_tools.__name__: bit_search_tools,
+                # bit_query_tools.__name__: bit_query_tools,
+              })
+        await asyncify(agent.create_thread)()
+
+        # If it doesn't exist, add a new entry
+        server_storage_tools_assistent[session_id] = agent
+        
+        
+        
+    try:
+        await  asyncify(agent.add_message)(question)
+        answer = await asyncify( agent.run_agent)()
+        print(f"Assistant: {answer}")
+        
+        # answer=await next(conversational_scheduler).ainvoke(input=question)
+        logging.info(f" response : %s",answer )
+        return {"question":question,"answer":answer}
+    except Exception as e:
+        conda_root = subprocess.check_output(["conda", "info", "--root"]).decode("utf-8").strip()
+        # Construct the path to the environments directory
+        environments_path = os.path.join(conda_root, "envs")
+        # Check if the Python executable is in the environments directory
+        if os.path.commonpath([environments_path, sys.executable]) == environments_path:
+            # Extract the environment name from the path
+            environment_name = os.path.basename(os.path.dirname(sys.executable))
+        else:
+            environment_name = "unknown"
+
+        print(f"Conda Environment: {environment_name}",conda_root,environments_path)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"An error occurred while processing your request{e}.")
+    
+@app.post("/conversationAsistent/{session_id}")
+async def sayCurrAsistent(conversation:Conversation,session_id :str = None):
+    question=conversation.question
+    print("recive :",question )
+    logging.info(f" requst : %s for se",question )
+
+    if session_id in server_storage_current_assistent:
+        # If it exists, update its value
+        agent =server_storage_current_assistent[session_id]
+    else:
+         
+        agent = ExistingAssistentAgent(assistant_id= ASSISTENT_ID)
+
+        await asyncify(agent.create_thread)()
+
+        # If it doesn't exist, add a new entry
+        server_storage_current_assistent[session_id] = agent
+        
+        
+        
+    try:
+        await  asyncify(agent.add_message)(question)
+        answer = await asyncify( agent.run_agent)()
+        print(f"Assistant: {answer}")
+        
+        # answer=await next(conversational_scheduler).ainvoke(input=question)
+        logging.info(f" response : %s",answer )
+        return {"question":question,"answer":answer}
+    except Exception as e:
+        conda_root = subprocess.check_output(["conda", "info", "--root"]).decode("utf-8").strip()
+        # Construct the path to the environments directory
+        environments_path = os.path.join(conda_root, "envs")
+        # Check if the Python executable is in the environments directory
+        if os.path.commonpath([environments_path, sys.executable]) == environments_path:
+            # Extract the environment name from the path
+            environment_name = os.path.basename(os.path.dirname(sys.executable))
+        else:
+            environment_name = "unknown"
+
+        print(f"Conda Environment: {environment_name}",conda_root,environments_path)
+        raise HTTPException(status_code=500, detail=f"An error occurred while processing your request{e}.")
+    
+ 
+    
+# @app.post("/delete_session/{session_uid}")
+# async def del_session(response: Response, session_uid:UUID = None):
+#         pass
+#----------------------------------------------------------excel -----qquestions---
+
+
+async def load_data_async(file_path=EXCEL_FILE):
+    loop = asyncio.get_running_loop()
+    df = await loop.run_in_executor(None, load_data, file_path)
+    return df
+
+@app.get("/additional_questions")
+async def get_questions():
+    df = await load_data_async(file_path=EXCEL_FILE)
+    return df.to_dict(orient='records')
+
+# @app.post("/additional_questions")
+# async def add_question(record: Record):
+#     df = await load_data_async(file_path=EXCEL_FILE)
+#     if record.question in df['question'].values:
+#         raise HTTPException(status_code=400, detail="Question already exists")
+#     # df = df.append({'question': record.question, 'answer': record.answer}, ignore_index=True)
+#     df = pd.concat([df, pd.DataFrame([{'question': record.question, 'answer': record.answer}])], ignore_index=True)
+#     df.to_excel(EXCEL_FILE, index=False)
+#     VectorDatabaseDAO().reset()
+#     return {"status": "success"}
+
+# @app.delete("/additional_questions/{question}")
+# async def delete_question(question: str):
+#     df = await load_data_async(file_path=EXCEL_FILE)
+    
+#     if question not in df['question'].values:
+#         raise HTTPException(status_code=404, detail="Question not found")
+#     df = df[df['question'] != question]
+#     df.to_excel(EXCEL_FILE, index=False)
+#     VectorDatabaseDAO().reset()
+#     return {"status": "success"}
+
+
+
+#  symantic search ----------------------------------
+@app.get("/symantic_search/")
+async def symantec_search_api(input_string: str):
+    try:
+        # Generate documents based on the input string
+        # conversational=Conversational()
+        return vectorDB.symantec_search(input_string)
+        
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": str(e)}
+    
+    
+@app.get("/query_symantic_search_with_score/")
+async def query_symantic_search_with_score(input_string: str):
+    try:
+        # Generate documents based on the input string
+        # conversational=Conversational()
+        return vectorDB.query_symantec_search_with_score(input_string)
+        
+    except Exception as e:
+        traceback.print_exc()
+        return {"error": str(e)}
